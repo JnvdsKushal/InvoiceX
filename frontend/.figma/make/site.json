@@ -1,0 +1,10 @@
+{
+  "description": "Streamline invoice financing for MSMEs with a secure platform that connects suppliers, buyers, and lenders, enabling efficient capital access and management.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
