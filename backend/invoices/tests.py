@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.urls import reverse
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APITestCase
 
 from accounts.models import User
@@ -265,3 +266,62 @@ class InvoiceAPITests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 409)
+
+
+    def test_supplier_can_upload_private_pdf_and_receive_sha256(self):
+        invoice = Invoice.objects.create(
+            supplier_organization=self.supplier_org,
+            buyer_organization=self.buyer_org,
+            invoice_number="INV-DOC-001",
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=20),
+            amount=Decimal("18000.00"),
+            currency="INR",
+            status=Invoice.Status.DRAFT,
+        )
+        file_content = b"%PDF-1.4\\nInvoice test content\\n%%EOF"
+        upload = SimpleUploadedFile("invoice.pdf", file_content, content_type="application/pdf")
+        response = self.client.post(
+            reverse("invoice-documents", kwargs={"pk": invoice.id}),
+            {"file": upload},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["sha256"], __import__("hashlib").sha256(file_content).hexdigest())
+        self.assertEqual(response.data["fileType"], "PDF")
+        self.assertEqual(len(response.data["sha256"]), 64)
+
+    def test_invoice_document_upload_rejects_mismatched_file_signature(self):
+        invoice = Invoice.objects.create(
+            supplier_organization=self.supplier_org,
+            buyer_organization=self.buyer_org,
+            invoice_number="INV-DOC-002",
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=20),
+            amount=Decimal("18000.00"),
+            currency="INR",
+        )
+        upload = SimpleUploadedFile("fake.pdf", b"this is not a pdf", content_type="application/pdf")
+        response = self.client.post(
+            reverse("invoice-documents", kwargs={"pk": invoice.id}),
+            {"file": upload},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(invoice.documents.exists())
+
+    def test_another_supplier_cannot_access_invoice_documents(self):
+        invoice = Invoice.objects.create(
+            supplier_organization=self.supplier_org,
+            buyer_organization=self.buyer_org,
+            invoice_number="INV-DOC-003",
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=20),
+            amount=Decimal("18000.00"),
+            currency="INR",
+        )
+        self.client.force_authenticate(user=self.other_supplier)
+        response = self.client.get(
+            reverse("invoice-documents", kwargs={"pk": invoice.id})
+        )
+        self.assertEqual(response.status_code, 404)
