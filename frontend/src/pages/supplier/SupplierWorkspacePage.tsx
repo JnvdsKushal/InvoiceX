@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AlertCircle, BadgeCheck, CalendarClock, CheckCircle2, FileText, Landmark, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
 import axios from "axios";
 import api from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 import type { Invoice, PaginatedResponse } from "../../types/invoice.types";
 
 type Offer = {
@@ -32,7 +33,7 @@ const money = (value: string | number, currency = "INR") =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(value || 0));
 const date = (value: string) => value ? new Date(value).toLocaleDateString("en-IN") : "—";
 const dateTime = (value: string) => value ? new Date(value).toLocaleString("en-IN") : "—";
-const readable = (value: string) => value.replaceAll("_", " ").toLowerCase().replace(/\\b\\w/g, (c) => c.toUpperCase());
+const readable = (value: string) => value.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 const statusClass = (status: string) =>
   "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold " +
   (["DELIVERED", "ACTIVE", "PAID", "SETTLED", "ACCEPTED", "ELIGIBLE_FOR_FINANCING"].includes(status)
@@ -40,7 +41,7 @@ const statusClass = (status: string) =>
     : ["FAILED", "REJECTED", "OVERDUE", "CANCELLED"].includes(status)
       ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700");
 
-function Panel({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
+function Panel({ title, children, action }: { title: string; children: ReactNode; action?: React.ReactNode }) {
   return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
       <h2 className="font-bold text-slate-900">{title}</h2>{action}
@@ -58,6 +59,7 @@ function Metric({ label, value, icon: Icon, note }: { label: string; value: stri
 
 export default function SupplierWorkspacePage() {
   const path = useLocation().pathname.split("/").filter(Boolean)[1] || "overview";
+  const { user } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [agreements, setAgreements] = useState<Agreement[]>([]);
@@ -136,6 +138,8 @@ export default function SupplierWorkspacePage() {
     financing: ["My Financing", "Track accepted offers, funding confirmation and settlement."],
     repayments: ["Repayments", "Review repayment obligations, receipts and outstanding balances."],
     ledger: ["Blockchain Ledger", "Inspect tamper-evident events recorded for your organization."],
+    organization: ["Organization Profile", "View the organization associated with your supplier account."],
+    settings: ["Account Settings", "Review your account and access details."],
   };
   const [title, subtitle] = headings[path] || headings.overview;
 
@@ -185,6 +189,26 @@ export default function SupplierWorkspacePage() {
     {path === "repayments" && <Panel title="Repayment schedule and receipts">
       {repayments.length ? <div className="space-y-4">{repayments.map((row) => <article key={row.id} className="rounded-xl border border-slate-200 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">Invoice {row.invoiceNumber}</h3><p className="mt-1 text-xs text-slate-500">Due {date(row.due_date)}</p></div><span className={statusClass(row.status)}>{readable(row.status)}</span></div><div className="mt-4 grid gap-3 sm:grid-cols-3"><div><p className="text-xs text-slate-500">Amount due</p><p className="mt-1 font-semibold">{money(row.amount_due)}</p></div><div><p className="text-xs text-slate-500">Received</p><p className="mt-1 font-semibold">{money(row.amount_received)}</p></div><div><p className="text-xs text-slate-500">Outstanding</p><p className="mt-1 font-semibold">{money(row.outstanding)}</p></div></div><div className="mt-4 border-t pt-3"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Payment receipts</p>{row.receipts?.length ? row.receipts.map((receipt) => <div key={receipt.id} className="mt-2 flex flex-wrap justify-between gap-2 text-sm"><span>{money(receipt.amount)} · {receipt.reference}</span><span className="text-xs text-slate-500">{dateTime(receipt.created_at)}</span></div>) : <p className="mt-2 text-sm text-slate-500">No receipts recorded yet.</p>}</div></article>)}</div> : <Empty>No repayment schedule has been created. It appears after a lender confirms disbursement.</Empty>}
       <p className="mt-4 text-xs text-slate-500">This page displays lender-recorded payment confirmations. It does not initiate bank payments.</p>
+    </Panel>}
+
+    {path === "organization" && <Panel title="Organization information">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div><p className="text-xs uppercase tracking-wide text-slate-500">Organization name</p><p className="mt-1 font-semibold text-slate-900">{user?.organization?.name || "—"}</p></div>
+        <div><p className="text-xs uppercase tracking-wide text-slate-500">Organization status</p><p className="mt-1"><span className={statusClass(user?.organization?.status || "UNKNOWN")}>{readable(user?.organization?.status || "UNKNOWN")}</span></p></div>
+        <div><p className="text-xs uppercase tracking-wide text-slate-500">Account holder</p><p className="mt-1 font-semibold text-slate-900">{user?.name || "—"}</p></div>
+        <div><p className="text-xs uppercase tracking-wide text-slate-500">Email</p><p className="mt-1 font-semibold text-slate-900">{user?.email || "—"}</p></div>
+      </div>
+      <p className="mt-5 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Organization profile editing and document management are not enabled yet. These details are read-only.</p>
+    </Panel>}
+
+    {path === "settings" && <Panel title="Account and security">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div><p className="text-xs uppercase tracking-wide text-slate-500">Signed-in user</p><p className="mt-1 font-semibold text-slate-900">{user?.name || "—"}</p></div>
+        <div><p className="text-xs uppercase tracking-wide text-slate-500">Login email</p><p className="mt-1 font-semibold text-slate-900">{user?.email || "—"}</p></div>
+        <div><p className="text-xs uppercase tracking-wide text-slate-500">Role</p><p className="mt-1 font-semibold text-slate-900">{readable(user?.role || "supplier")}</p></div>
+        <div><p className="text-xs uppercase tracking-wide text-slate-500">Account status</p><p className="mt-1"><span className={statusClass(user?.status || "UNKNOWN")}>{readable(user?.status || "UNKNOWN")}</span></p></div>
+      </div>
+      <p className="mt-5 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">Password changes, notification preferences and session controls will be added after the corresponding secure account APIs are implemented.</p>
     </Panel>}
 
     {path === "ledger" && <Panel title="Tamper-evident event history" action={<button disabled={busy === "verify"} onClick={() => void verify()} className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"><ShieldCheck size={15}/>{busy === "verify" ? "Verifying…" : "Verify chain"}</button>}>
