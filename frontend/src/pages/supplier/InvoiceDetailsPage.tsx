@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Send, RefreshCw } from "lucide-react";
 import axios from "axios";
+import api from "../../services/api";
 
 import { invoiceService } from "../../services/invoice.service";
 import type { Invoice } from "../../types/invoice.types";
@@ -16,6 +17,9 @@ export default function InvoiceDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [clarificationEvents, setClarificationEvents] = useState<Array<{ id: string; decision: string; comment: string; createdAt: string; actorName: string; invoiceId: string }>>([]);
+  const [clarificationReply, setClarificationReply] = useState("");
+  const [replying, setReplying] = useState(false);
   const [notice, setNotice] = useState(
     (location.state as { message?: string } | null)?.message || ""
   );
@@ -29,6 +33,12 @@ export default function InvoiceDetailsPage() {
     try {
       const data = await invoiceService.getInvoice(id);
       setInvoice(data);
+      try {
+        const history = await api.get<Array<{ id: string; decision: string; comment: string; createdAt: string; actorName: string; invoiceId: string }>>("/invoices/verification-history/");
+        setClarificationEvents(history.data.filter((event) => event.invoiceId === id));
+      } catch {
+        setClarificationEvents([]);
+      }
     } catch {
       setError("Unable to load this invoice.");
     } finally {
@@ -79,6 +89,37 @@ export default function InvoiceDetailsPage() {
       }
     } finally {
       setSubmitting(false);
+    }
+  }
+
+
+  async function handleClarificationReply() {
+    if (!invoice || !id || !clarificationReply.trim()) return;
+    setReplying(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await api.post("/invoices/" + id + "/clarification-response/", {
+        comment: clarificationReply.trim(),
+        version: invoice.version,
+      });
+      setInvoice(response.data.invoice);
+      setClarificationReply("");
+      setNotice("Your clarification response has been sent to the buyer.");
+      try {
+        const history = await api.get<Array<{ id: string; decision: string; comment: string; createdAt: string; actorName: string; invoiceId: string }>>("/invoices/verification-history/");
+        setClarificationEvents(history.data.filter((event) => event.invoiceId === id));
+      } catch {
+        // The response was saved; history can be refreshed separately.
+      }
+    } catch (err) {
+      const message = axios.isAxiosError(err) && typeof err.response?.data?.detail === "string"
+        ? err.response.data.detail
+        : "Unable to send the clarification response. Refresh the invoice and try again.";
+      setError(message);
+      if (axios.isAxiosError(err) && err.response?.status === 409) await loadInvoice();
+    } finally {
+      setReplying(false);
     }
   }
 
@@ -214,7 +255,53 @@ export default function InvoiceDetailsPage() {
             {submitting ? "Submitting..." : "Submit for Verification"}
           </button>
         )}
+
       </section>
+
+      {invoice.status === "NEEDS_CLARIFICATION" && (
+        <section className="rounded-2xl border border-amber-200 bg-white p-6">
+          <h2 className="text-lg font-bold text-slate-900">Buyer clarification requested</h2>
+          {clarificationEvents.filter((event) => event.decision === "CLARIFICATION").slice(0, 1).map((event) => (
+            <div key={event.id} className="mt-4 rounded-xl bg-amber-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Buyer's note · {event.actorName}</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm text-amber-950">{event.comment}</p>
+              <p className="mt-2 text-xs text-amber-700">{new Date(event.createdAt).toLocaleString()}</p>
+            </div>
+          ))}
+          <label htmlFor="clarification-reply" className="mt-5 block text-sm font-semibold text-slate-800">Your response</label>
+          <textarea
+            id="clarification-reply"
+            value={clarificationReply}
+            onChange={(event) => setClarificationReply(event.target.value)}
+            maxLength={5000}
+            rows={4}
+            placeholder="Explain the correction or provide the information requested by the buyer…"
+            className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-teal-600"
+          />
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-slate-500">{clarificationReply.length}/5000 characters. This response is recorded in the verification history and ledger.</p>
+            <button
+              onClick={handleClarificationReply}
+              disabled={replying || !clarificationReply.trim()}
+              className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {replying ? <RefreshCw size={16} className="animate-spin" /> : <Send size={16} />}
+              {replying ? "Sending…" : "Send response to buyer"}
+            </button>
+          </div>
+          {clarificationEvents.filter((event) => event.decision === "CLARIFICATION_RESPONSE").length > 0 && (
+            <div className="mt-5 border-t border-slate-100 pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Previous responses</p>
+              {clarificationEvents.filter((event) => event.decision === "CLARIFICATION_RESPONSE").map((event) => (
+                <div key={event.id} className="mt-3 rounded-lg bg-slate-50 p-3">
+                  <p className="whitespace-pre-wrap text-sm text-slate-700">{event.comment}</p>
+                  <p className="mt-2 text-xs text-slate-500">{new Date(event.createdAt).toLocaleString()}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }
