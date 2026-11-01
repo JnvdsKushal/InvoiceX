@@ -1,5 +1,6 @@
 import django.db.models.deletion
 import uuid
+import django.utils.timezone
 from django.conf import settings
 from django.db import migrations, models
 
@@ -25,7 +26,7 @@ class Migration(migrations.Migration):
                 ("payload", models.JSONField(default=dict)),
                 ("status", models.CharField(choices=[("PENDING", "Pending"), ("DELIVERED", "Delivered"), ("FAILED", "Failed")], default="PENDING", max_length=12)),
                 ("attempts", models.PositiveIntegerField(default=0)),
-                ("next_attempt_at", models.DateTimeField()),
+                ("next_attempt_at", models.DateTimeField(default=django.utils.timezone.now)),
                 ("block_index", models.PositiveIntegerField(blank=True, null=True)),
                 ("block_hash", models.CharField(blank=True, max_length=64)),
                 ("last_error", models.TextField(blank=True)),
