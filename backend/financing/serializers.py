@@ -1,4 +1,5 @@
 from decimal import Decimal, ROUND_HALF_UP
+from django.utils import timezone
 from rest_framework import serializers
 from .models import FinancingOffer, FinancingAgreement, Repayment
 
@@ -17,6 +18,31 @@ class FinancingOfferSerializer(serializers.ModelSerializer):
         model = FinancingOffer
         fields = ("id", "invoice", "invoiceNumber", "invoiceAmount", "currency", "supplierName", "buyerName", "lenderName", "advance_percentage", "fee_percentage", "annual_interest_rate", "repayment_days", "expires_at", "status", "created_at", "advanceAmount", "feeAmount")
         read_only_fields = ("id", "status", "created_at")
+
+    def validate_advance_percentage(self, value):
+        if value <= 0 or value > 100:
+            raise serializers.ValidationError("Advance percentage must be greater than 0 and at most 100.")
+        return value
+
+    def validate_fee_percentage(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("Fee percentage must be between 0 and 100.")
+        return value
+
+    def validate_annual_interest_rate(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("Annual interest rate must be between 0 and 100.")
+        return value
+
+    def validate_repayment_days(self, value):
+        if value < 1 or value > 3650:
+            raise serializers.ValidationError("Repayment period must be between 1 and 3650 days.")
+        return value
+
+    def validate_expires_at(self, value):
+        if value <= timezone.now():
+            raise serializers.ValidationError("Offer expiry must be in the future.")
+        return value
 
     def get_advanceAmount(self, obj):
         return str((obj.invoice.amount * obj.advance_percentage / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
