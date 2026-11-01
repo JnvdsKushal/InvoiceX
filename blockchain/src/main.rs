@@ -85,6 +85,17 @@ async fn append_event(
     let mut ledger = state.ledger.lock().await;
 
     if let Some(existing) = ledger.find_event(&request.event_id) {
+        let same_event = existing.event_type == request.event_type
+            && existing.entity_type == request.entity_type
+            && existing.entity_id == request.entity_id
+            && existing.actor_id == request.actor_id
+            && existing.payload == request.payload;
+        if !same_event {
+            return Err(error(
+                StatusCode::CONFLICT,
+                "Event ID already exists with different event data",
+            ));
+        }
         return Ok(Json(json!({
             "success": true,
             "duplicate": true,
