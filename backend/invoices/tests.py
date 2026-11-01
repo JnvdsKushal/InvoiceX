@@ -201,3 +201,67 @@ class InvoiceAPITests(APITestCase):
         self.assertEqual(response.status_code, 400)
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, Invoice.Status.PENDING_VERIFICATION)
+
+
+    def test_supplier_can_respond_to_buyer_clarification(self):
+        invoice = Invoice.objects.create(
+            supplier_organization=self.supplier_org,
+            buyer_organization=self.buyer_org,
+            invoice_number="INV-CLARIFY-001",
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=20),
+            amount=Decimal("18000.00"),
+            currency="INR",
+            status=Invoice.Status.NEEDS_CLARIFICATION,
+        )
+        response = self.client.post(
+            reverse("supplier-clarification-response", kwargs={"pk": invoice.id}),
+            {"comment": "Attached the corrected purchase order reference.", "version": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, Invoice.Status.NEEDS_CLARIFICATION)
+        self.assertEqual(invoice.version, 2)
+        self.assertEqual(
+            response.data["response"]["comment"],
+            "Attached the corrected purchase order reference.",
+        )
+
+    def test_supplier_clarification_response_requires_comment(self):
+        invoice = Invoice.objects.create(
+            supplier_organization=self.supplier_org,
+            buyer_organization=self.buyer_org,
+            invoice_number="INV-CLARIFY-002",
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=20),
+            amount=Decimal("18000.00"),
+            currency="INR",
+            status=Invoice.Status.NEEDS_CLARIFICATION,
+        )
+        response = self.client.post(
+            reverse("supplier-clarification-response", kwargs={"pk": invoice.id}),
+            {"comment": "   ", "version": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.version, 1)
+
+    def test_supplier_cannot_respond_when_invoice_is_not_awaiting_clarification(self):
+        invoice = Invoice.objects.create(
+            supplier_organization=self.supplier_org,
+            buyer_organization=self.buyer_org,
+            invoice_number="INV-CLARIFY-003",
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=20),
+            amount=Decimal("18000.00"),
+            currency="INR",
+            status=Invoice.Status.PENDING_VERIFICATION,
+        )
+        response = self.client.post(
+            reverse("supplier-clarification-response", kwargs={"pk": invoice.id}),
+            {"comment": "Here is the response.", "version": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 409)
