@@ -102,6 +102,14 @@ class WithdrawOfferView(APIView):
                 raise WorkflowConflict("Only active offers can be withdrawn.")
             offer.status = FinancingOffer.Status.WITHDRAWN
             offer.save(update_fields=["status"])
+            queue_ledger_event(
+                event_type="FINANCING_OFFER_WITHDRAWN",
+                entity_type="invoice",
+                entity_id=offer.invoice_id,
+                actor=request.user,
+                invoice=offer.invoice,
+                payload={"offer_id": str(offer.id), "status": offer.status},
+            )
         return Response(FinancingOfferSerializer(offer).data)
 
 
