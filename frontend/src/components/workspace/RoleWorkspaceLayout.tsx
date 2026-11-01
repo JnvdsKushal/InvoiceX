@@ -1,29 +1,29 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Activity, Bell, LogOut, Menu, X, type LucideIcon } from "lucide-react";
+import { Activity, BadgeCheck, Bell, Building2, CalendarClock, FileCheck2, FileSearch, Landmark, LayoutDashboard, LogOut, Menu, Settings, ShieldCheck, Users, Wallet, X, type LucideIcon } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
 type Role = "buyer" | "lender";
 interface Item { label: string; path: string; icon: LucideIcon; end?: boolean }
 const buyerItems: Item[] = [
-  { label: "Overview", path: "/buyer", icon: Activity, end: true },
-  { label: "Invoice Inbox", path: "/buyer/inbox", icon: Activity },
-  { label: "Verification History", path: "/buyer/history", icon: Activity },
-  { label: "Suppliers", path: "/buyer/suppliers", icon: Activity },
-  { label: "Blockchain Ledger", path: "/buyer/ledger", icon: Activity },
-  { label: "Organization Profile", path: "/buyer/organization", icon: Activity },
-  { label: "Settings", path: "/buyer/settings", icon: Activity },
+  { label: "Overview", path: "/buyer", icon: LayoutDashboard, end: true },
+  { label: "Invoice Inbox", path: "/buyer/inbox", icon: FileSearch },
+  { label: "Verification History", path: "/buyer/history", icon: BadgeCheck },
+  { label: "Suppliers", path: "/buyer/suppliers", icon: Users },
+  { label: "Blockchain Ledger", path: "/buyer/ledger", icon: ShieldCheck },
+  { label: "Organization Profile", path: "/buyer/organization", icon: Building2 },
+  { label: "Settings", path: "/buyer/settings", icon: Settings },
 ];
 const lenderItems: Item[] = [
-  { label: "Overview", path: "/lender", icon: Activity, end: true },
-  { label: "Invoice Marketplace", path: "/lender/marketplace", icon: Activity },
-  { label: "My Offers", path: "/lender/offers", icon: Activity },
-  { label: "Active Financing", path: "/lender/financing", icon: Activity },
-  { label: "Repayments", path: "/lender/repayments", icon: Activity },
+  { label: "Overview", path: "/lender", icon: LayoutDashboard, end: true },
+  { label: "Invoice Marketplace", path: "/lender/marketplace", icon: Landmark },
+  { label: "My Offers", path: "/lender/offers", icon: FileCheck2 },
+  { label: "Active Financing", path: "/lender/financing", icon: Wallet },
+  { label: "Repayments", path: "/lender/repayments", icon: CalendarClock },
   { label: "Portfolio Analytics", path: "/lender/portfolio", icon: Activity },
-  { label: "Blockchain Ledger", path: "/lender/ledger", icon: Activity },
-  { label: "Organization Profile", path: "/lender/organization", icon: Activity },
-  { label: "Settings", path: "/lender/settings", icon: Activity },
+  { label: "Blockchain Ledger", path: "/lender/ledger", icon: ShieldCheck },
+  { label: "Organization Profile", path: "/lender/organization", icon: Building2 },
+  { label: "Settings", path: "/lender/settings", icon: Settings },
 ];
 
 function Sidebar({ role, close }: { role: Role; close?: () => void }) {
