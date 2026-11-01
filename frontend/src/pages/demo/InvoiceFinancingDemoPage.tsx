@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useRef, useState } from "react";
 import { ArrowRight, BadgeCheck, Banknote, CheckCircle2, ChevronRight, Clock3, Copy, FileCheck2, FilePlus2, Fingerprint, Landmark, LockKeyhole, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 
 type Stage = "draft" | "hashed" | "verified" | "funded";
@@ -41,12 +41,11 @@ export default function InvoiceFinancingDemoPage() {
   const receiveAmount = selected ? Math.round(numericAmount * selected.advance / 100 * (1 - selected.fee / 100)) : 0;
   const canHash = invoiceNumber.trim() && supplier.trim() && buyer.trim() && numericAmount > 0 && dueDate;
   const progress = stage === "draft" ? 0 : stage === "hashed" ? 1 : stage === "verified" ? 2 : 3;
-  const stageLabel = useMemo(() => ({ draft: "Invoice prepared", hashed: "Hash created", verified: "Integrity verified", funded: "Demo funding completed" }[stage]), [stage]);
   async function addLedgerEvent(label: string, detail: string, payload: string) {
     const currentLedger = ledgerRef.current;
     const previousHash = currentLedger.length ? currentLedger[currentLedger.length - 1].hash : "GENESIS";
     const time = new Date().toISOString();
-    const hash = await sha256(JSON.stringify({ sequence: ledger.length + 1, label, detail, payload, previousHash, time }));
+    const hash = await sha256(JSON.stringify({ sequence: currentLedger.length + 1, label, detail, payload, previousHash, time }));
     const nextLedger = [...ledgerRef.current, { label, detail, hash, previousHash, time }];
     ledgerRef.current = nextLedger;
     setLedger(nextLedger);
