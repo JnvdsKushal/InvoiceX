@@ -1,6 +1,7 @@
-import { useState } from "react";
-import type { FormEvent } from "react";
+
+import { useState, type ChangeEvent, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import axios from "axios";
 import {
   ArrowRight,
   Building2,
@@ -10,24 +11,30 @@ import {
   Mail,
   UserRound,
 } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 
 function RegisterPage() {
+  const { register } = useAuth();
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     email: "",
     organizationName: "",
-    organizationType: "MSME",
+    organizationType: "MSME" as "MSME" | "BUYER" | "LENDER",
     password: "",
     confirmPassword: "",
   });
 
   function handleChange(
-    event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    event: ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) {
     const { name, value } = event.target;
 
@@ -37,10 +44,14 @@ function RegisterPage() {
     }));
 
     setError("");
+    setSuccess("");
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    setError("");
+    setSuccess("");
 
     if (formData.password.length < 10) {
       setError("Password must contain at least 10 characters.");
@@ -52,9 +63,49 @@ function RegisterPage() {
       return;
     }
 
-    // Django registration API integration comes next.
-    // Never log or store the password in browser storage.
-    console.log("Registration form validated for:", formData.email);
+    setIsSubmitting(true);
+
+    try {
+      await register({
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email: formData.email.trim(),
+        organizationName: formData.organizationName.trim(),
+        organizationType: formData.organizationType,
+        password: formData.password,
+      });
+
+      setSuccess(
+        "Registration successful! Your organization is awaiting approval. You'll be able to sign in once your account is activated."
+      );
+
+      setFormData({
+        firstName: "",
+        lastName: "",
+        email: "",
+        organizationName: "",
+        organizationType: "MSME",
+        password: "",
+        confirmPassword: "",
+      });
+    } catch (err: unknown) {
+      let message = "Registration failed. Please check your details.";
+
+      if (axios.isAxiosError(err)) {
+        const data = err.response?.data;
+
+        message =
+          data?.detail ||
+          data?.email?.[0] ||
+          data?.organizationName?.[0] ||
+          data?.non_field_errors?.[0] ||
+          message;
+      }
+
+      setError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   const inputClass =
@@ -110,11 +161,19 @@ function RegisterPage() {
 
             <div className="grid sm:grid-cols-2 gap-5 mt-6">
               <div>
-                <label htmlFor="firstName" className="block text-sm font-semibold mb-2">
+                <label
+                  htmlFor="firstName"
+                  className="block text-sm font-semibold mb-2"
+                >
                   First name
                 </label>
+
                 <div className="relative">
-                  <UserRound size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <UserRound
+                    size={17}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
                   <input
                     id="firstName"
                     name="firstName"
@@ -129,9 +188,13 @@ function RegisterPage() {
               </div>
 
               <div>
-                <label htmlFor="lastName" className="block text-sm font-semibold mb-2">
+                <label
+                  htmlFor="lastName"
+                  className="block text-sm font-semibold mb-2"
+                >
                   Last name
                 </label>
+
                 <input
                   id="lastName"
                   name="lastName"
@@ -146,11 +209,19 @@ function RegisterPage() {
             </div>
 
             <div className="mt-5">
-              <label htmlFor="email" className="block text-sm font-semibold mb-2">
+              <label
+                htmlFor="email"
+                className="block text-sm font-semibold mb-2"
+              >
                 Business email address
               </label>
+
               <div className="relative">
-                <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Mail
+                  size={18}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
                 <input
                   id="email"
                   name="email"
@@ -172,9 +243,13 @@ function RegisterPage() {
             </h2>
 
             <div className="mt-6">
-              <label htmlFor="organizationName" className="block text-sm font-semibold mb-2">
+              <label
+                htmlFor="organizationName"
+                className="block text-sm font-semibold mb-2"
+              >
                 Organization name
               </label>
+
               <input
                 id="organizationName"
                 name="organizationName"
@@ -187,7 +262,10 @@ function RegisterPage() {
             </div>
 
             <div className="mt-5">
-              <label htmlFor="organizationType" className="block text-sm font-semibold mb-2">
+              <label
+                htmlFor="organizationType"
+                className="block text-sm font-semibold mb-2"
+              >
                 Organization type
               </label>
 
@@ -211,12 +289,19 @@ function RegisterPage() {
             </h2>
 
             <div className="mt-6">
-              <label htmlFor="password" className="block text-sm font-semibold mb-2">
+              <label
+                htmlFor="password"
+                className="block text-sm font-semibold mb-2"
+              >
                 Password
               </label>
 
               <div className="relative">
-                <LockKeyhole size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <LockKeyhole
+                  size={18}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
                 <input
                   id="password"
                   name="password"
@@ -229,6 +314,7 @@ function RegisterPage() {
                   placeholder="At least 10 characters"
                   className={`${inputClass} pl-10 pr-12`}
                 />
+
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
@@ -241,12 +327,19 @@ function RegisterPage() {
             </div>
 
             <div className="mt-5">
-              <label htmlFor="confirmPassword" className="block text-sm font-semibold mb-2">
+              <label
+                htmlFor="confirmPassword"
+                className="block text-sm font-semibold mb-2"
+              >
                 Confirm password
               </label>
 
               <div className="relative">
-                <LockKeyhole size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <LockKeyhole
+                  size={18}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
                 <input
                   id="confirmPassword"
                   name="confirmPassword"
@@ -258,28 +351,59 @@ function RegisterPage() {
                   placeholder="Re-enter your password"
                   className={`${inputClass} pl-10 pr-12`}
                 />
+
                 <button
                   type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  onClick={() =>
+                    setShowConfirmPassword(!showConfirmPassword)
+                  }
+                  aria-label={
+                    showConfirmPassword ? "Hide password" : "Show password"
+                  }
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
                 >
-                  {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showConfirmPassword ? (
+                    <EyeOff size={18} />
+                  ) : (
+                    <Eye size={18} />
+                  )}
                 </button>
               </div>
             </div>
 
             {error && (
-              <div role="alert" className="mt-5 rounded-xl bg-red-50 border border-red-100 p-3 text-sm text-red-700">
+              <div
+                role="alert"
+                className="mt-5 rounded-xl bg-red-50 border border-red-100 p-3 text-sm text-red-700"
+              >
                 {error}
+              </div>
+            )}
+
+            {success && (
+              <div
+                role="status"
+                className="mt-5 rounded-xl bg-teal-50 border border-teal-100 p-4 text-sm text-teal-800"
+              >
+                {success}
+                <p className="mt-3">
+                  <Link
+                    to="/login"
+                    className="font-semibold underline hover:text-teal-900"
+                  >
+                    Go to sign in
+                  </Link>
+                </p>
               </div>
             )}
 
             <button
               type="submit"
-              className="mt-8 w-full h-13 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold flex items-center justify-center gap-2 transition"
+              disabled={isSubmitting || Boolean(success)}
+              className="mt-8 w-full h-13 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold flex items-center justify-center gap-2 transition"
             >
-              Create account <ArrowRight size={18} />
+              {isSubmitting ? "Creating account..." : "Create account"}
+              {!isSubmitting && <ArrowRight size={18} />}
             </button>
 
             <p className="text-xs leading-6 text-slate-400 text-center mt-5">

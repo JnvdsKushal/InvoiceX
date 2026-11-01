@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+
+import { useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
 import {
   ArrowRight,
   Eye,
@@ -8,17 +10,44 @@ import {
   Mail,
   ShieldCheck,
 } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 
 function LoginPage() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
 
-    // Django login API integration comes next.
-    console.log("Login form ready for API integration:", { email });
+    setError("");
+    setIsSubmitting(true);
+
+    try {
+      await login(email.trim(), password);
+      navigate("/dashboard", { replace: true });
+    } catch (err: unknown) {
+      let message = "Login failed. Please check your credentials.";
+
+      if (axios.isAxiosError(err)) {
+        const data = err.response?.data;
+
+        message =
+          data?.detail ||
+          data?.non_field_errors?.[0] ||
+          data?.email?.[0] ||
+          message;
+      }
+
+      setError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -94,7 +123,10 @@ function LoginPage() {
                     autoComplete="email"
                     required
                     value={email}
-                    onChange={(event) => setEmail(event.target.value)}
+                    onChange={(event) => {
+                      setEmail(event.target.value);
+                      setError("");
+                    }}
                     placeholder="you@company.com"
                     className="w-full h-13 pl-12 pr-4 rounded-xl border border-slate-200 outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-500/10 transition"
                   />
@@ -130,7 +162,10 @@ function LoginPage() {
                     autoComplete="current-password"
                     required
                     value={password}
-                    onChange={(event) => setPassword(event.target.value)}
+                    onChange={(event) => {
+                      setPassword(event.target.value);
+                      setError("");
+                    }}
                     placeholder="Enter your password"
                     className="w-full h-13 pl-12 pr-12 rounded-xl border border-slate-200 outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-500/10 transition"
                   />
@@ -146,11 +181,22 @@ function LoginPage() {
                 </div>
               </div>
 
+              {error && (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-700"
+                >
+                  {error}
+                </div>
+              )}
+
               <button
                 type="submit"
-                className="w-full h-13 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition"
+                disabled={isSubmitting}
+                className="w-full h-13 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition"
               >
-                Sign in <ArrowRight size={18} />
+                {isSubmitting ? "Signing in..." : "Sign in"}
+                {!isSubmitting && <ArrowRight size={18} />}
               </button>
             </form>
 

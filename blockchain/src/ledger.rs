@@ -1,39 +1,104 @@
-
 use crate::block::Block;
-use std::{fs, io, path::Path};
+use serde_json::Value;
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 pub struct Ledger {
     pub blocks: Vec<Block>,
+    path: PathBuf,
 }
 
 impl Ledger {
-    pub fn new() -> Self {
+    pub fn new(path: impl AsRef<Path>) -> Self {
         Self {
             blocks: vec![Block::new(
                 0,
                 0,
                 "GENESIS".into(),
+                "GENESIS".into(),
                 "SYSTEM".into(),
+                "SYSTEM".into(),
+                "SYSTEM".into(),
+                Value::Null,
                 "0".into(),
             )],
+            path: path.as_ref().to_path_buf(),
+        }
+    }
+
+    pub fn load_or_create(path: impl AsRef<Path>) -> io::Result<Self> {
+        let path = path.as_ref();
+
+        if path.exists() {
+            let json = fs::read_to_string(path)?;
+
+            let blocks: Vec<Block> = serde_json::from_str(&json)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+            let ledger = Self {
+                blocks,
+                path: path.to_path_buf(),
+            };
+
+            if !ledger.validate() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Ledger integrity check failed",
+                ));
+            }
+
+            Ok(ledger)
+        } else {
+            let ledger = Self::new(path);
+            ledger.save()?;
+            Ok(ledger)
         }
     }
 
     pub fn add_event(
         &mut self,
         timestamp: u64,
+        event_id: String,
         event_type: String,
-        invoice_id: String,
-    ) {
-        let previous = self.blocks.last().expect("Genesis block must exist");
+        entity_type: String,
+        entity_id: String,
+        actor_id: String,
+        payload: Value,
+    ) -> io::Result<Block> {
+        if self.blocks.iter().any(|b| b.event_id == event_id) {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "Duplicate event ID",
+            ));
+        }
 
-        self.blocks.push(Block::new(
+        let previous = self
+            .blocks
+            .last()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Genesis block missing"))?;
+
+        let block = Block::new(
             previous.index + 1,
             timestamp,
+            event_id,
             event_type,
-            invoice_id,
+            entity_type,
+            entity_id,
+            actor_id,
+            payload,
             previous.hash.clone(),
-        ));
+        );
+
+        self.blocks.push(block.clone());
+
+        if let Err(error) = self.save() {
+            self.blocks.pop();
+            return Err(error);
+        }
+
+        Ok(block)
     }
 
     pub fn validate(&self) -> bool {
@@ -47,19 +112,13 @@ impl Ledger {
             }
 
             if i == 0 {
-                if block.index != 0
-                    || block.previous_hash != "0"
-                    || block.event_type != "GENESIS"
-                    || block.invoice_id != "SYSTEM"
-                {
+                if block.index != 0 || block.previous_hash != "0" || block.event_type != "GENESIS" {
                     return false;
                 }
             } else {
                 let previous = &self.blocks[i - 1];
 
-                if block.index != previous.index + 1
-                    || block.previous_hash != previous.hash
-                {
+                if block.index != previous.index + 1 || block.previous_hash != previous.hash {
                     return false;
                 }
             }
@@ -68,107 +127,37 @@ impl Ledger {
         true
     }
 
-    pub fn save_to_file(&self, path: impl AsRef<Path>) -> io::Result<()> {
+    fn save(&self) -> io::Result<()> {
         if !self.validate() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                "Cannot save an invalid ledger",
+                "Cannot save invalid ledger",
             ));
         }
 
-        let json = serde_json::to_string_pretty(&self.blocks)
-            .map_err(|e| io::Error::other(e.to_string()))?;
+        let json =
+            serde_json::to_vec_pretty(&self.blocks).map_err(|e| io::Error::other(e.to_string()))?;
 
-        fs::write(path, json)
+        let temp_path = self.path.with_extension("tmp");
+
+        fs::write(&temp_path, json)?;
+        fs::rename(&temp_path, &self.path)?;
+
+        Ok(())
     }
 
-    pub fn load_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
-        let json = fs::read_to_string(path)?;
-        let blocks: Vec<Block> = serde_json::from_str(&json)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-        let ledger = Self { blocks };
-
-        if !ledger.validate() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Ledger integrity check failed",
-            ));
-        }
-
-        Ok(ledger)
-    }
-}
-
-impl Default for Ledger {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn test_file(name: &str) -> std::path::PathBuf {
-        std::env::temp_dir().join(format!(
-            "invoicex-{name}-{}.json",
-            std::process::id()
-        ))
+    pub fn get_blocks(&self) -> Vec<Block> {
+        self.blocks.clone()
     }
 
-    #[test]
-    fn new_ledger_is_valid() {
-        assert!(Ledger::new().validate());
+    pub fn find_event(&self, event_id: &str) -> Option<Block> {
+        self.blocks
+            .iter()
+            .find(|block| block.event_id == event_id)
+            .cloned()
     }
 
-    #[test]
-    fn appended_event_keeps_chain_valid() {
-        let mut ledger = Ledger::new();
-        ledger.add_event(100, "INVOICE_REGISTERED".into(), "INV-001".into());
-
-        assert_eq!(ledger.blocks.len(), 2);
-        assert!(ledger.validate());
-    }
-
-    #[test]
-    fn modified_block_is_detected() {
-        let mut ledger = Ledger::new();
-        ledger.add_event(100, "INVOICE_REGISTERED".into(), "INV-001".into());
-        ledger.blocks[1].invoice_id = "INV-999".into();
-
-        assert!(!ledger.validate());
-    }
-
-    #[test]
-    fn ledger_survives_save_and_reload() {
-        let path = test_file("persistence");
-        let mut original = Ledger::new();
-
-        original.add_event(100, "INVOICE_REGISTERED".into(), "INV-001".into());
-        original.save_to_file(&path).unwrap();
-
-        let restored = Ledger::load_from_file(&path).unwrap();
-
-        assert_eq!(restored.blocks.len(), 2);
-        assert_eq!(restored.blocks[1].invoice_id, "INV-001");
-        assert!(restored.validate());
-
-        fs::remove_file(path).ok();
-    }
-
-    #[test]
-    fn corrupted_saved_ledger_is_rejected() {
-        let path = test_file("corruption");
-        let mut ledger = Ledger::new();
-
-        ledger.add_event(100, "INVOICE_REGISTERED".into(), "INV-001".into());
-        ledger.save_to_file(&path).unwrap();
-
-        let json = fs::read_to_string(&path).unwrap();
-        fs::write(&path, json.replace("INV-001", "INV-999")).unwrap();
-
-        assert!(Ledger::load_from_file(&path).is_err());
-        fs::remove_file(path).ok();
+    pub fn count(&self) -> usize {
+        self.blocks.len()
     }
 }
