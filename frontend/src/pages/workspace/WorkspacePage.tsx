@@ -11,7 +11,8 @@ type Supplier={id:string;name:string;status:string;registrationIdentifier:string
 type Opportunity={id:string;invoiceNumber:string;supplierName:string;buyerName:string;amount:string;currency:string;dueDate:string;description:string;purchaseOrderReference:string|null};
 type Offer={id:string;invoice:string;invoiceNumber:string;invoiceAmount:string;currency:string;supplierName:string;advance_percentage:string;fee_percentage:string;annual_interest_rate:string;repayment_days:number;expires_at:string;status:string;advanceAmount:string;feeAmount:string};
 type Agreement={id:string;invoiceNumber:string;supplierName:string;principal_amount:string;fee_amount:string;interest_amount:string;net_proceeds:string;repayment_amount:string;due_date:string;status:string;disbursement_reference:string};
-type Receipt={id:string;amount:string;reference:string;recordedBy:string;created_at:string};\ntype Repayment={id:string;invoiceNumber:string;amount_due:string;amount_received:string;outstanding:string;due_date:string;status:string;receipts:Receipt[]};
+type Receipt={id:string;amount:string;reference:string;recordedBy:string;created_at:string};
+type Repayment={id:string;invoiceNumber:string;amount_due:string;amount_received:string;outstanding:string;due_date:string;status:string;receipts:Receipt[]};
 type LedgerEvent={id:string;eventId:string;eventType:string;entityType:string;entityId:string;status:string;sequence:number|null;hash:string;previousHash:string;actor:string;createdAt:string;deliveredAt:string|null;lastError:string};
 
 const cash=(n:string|number,c="INR")=>new Intl.NumberFormat("en-IN",{style:"currency",currency:c,maximumFractionDigits:2}).format(Number(n||0));
