@@ -1,8 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-import BuyerDashboardPage from "./buyer/BuyerDashboardPage";
-import LenderDashboardPage from "./lender/LenderDashboardPage";
 
 export default function DashboardRouter() {
   const { user, isLoading } = useAuth();
@@ -27,10 +25,10 @@ export default function DashboardRouter() {
       return <Navigate to="/supplier" replace />;
 
     case "buyer":
-      return <BuyerDashboardPage />;
+      return <Navigate to="/buyer" replace />;
 
     case "lender":
-      return <LenderDashboardPage />;
+      return <Navigate to="/lender" replace />;
 
     default:
       return <Navigate to="/unauthorized" replace />;
