@@ -27,6 +27,7 @@ import AdminSettingsPage from "./pages/admin/AdminSettingsPage";
 
 // Supplier layout and pages
 import SupplierLayout from "./components/supplier/SupplierLayout";
+import RoleWorkspaceLayout from "./components/workspace/RoleWorkspaceLayout";
 import SupplierOverviewPage from "./pages/supplier/SupplierOverviewPage";
 import SupplierModulePage from "./components/supplier/SupplierModulePage";
 
@@ -301,24 +302,32 @@ export default function App() {
 
           {/* ================= BUYER ROUTES ================= */}
 
-          <Route
-            element={<ProtectedRoute allowedRoles={["buyer"]} />}
-          >
-            <Route
-              path="/buyer"
-              element={<BuyerDashboardPage />}
-            />
+          <Route element={<ProtectedRoute allowedRoles={["buyer"]} />}>
+            <Route path="/buyer" element={<RoleWorkspaceLayout role="buyer" />}>
+              <Route index element={<BuyerDashboardPage />} />
+              <Route path="inbox" element={<BuyerDashboardPage />} />
+              <Route path="history" element={<BuyerDashboardPage />} />
+              <Route path="suppliers" element={<BuyerDashboardPage />} />
+              <Route path="ledger" element={<BuyerDashboardPage />} />
+              <Route path="organization" element={<BuyerDashboardPage />} />
+              <Route path="settings" element={<BuyerDashboardPage />} />
+            </Route>
           </Route>
 
           {/* ================= LENDER ROUTES ================= */}
 
-          <Route
-            element={<ProtectedRoute allowedRoles={["lender"]} />}
-          >
-            <Route
-              path="/lender"
-              element={<LenderDashboardPage />}
-            />
+          <Route element={<ProtectedRoute allowedRoles={["lender"]} />}>
+            <Route path="/lender" element={<RoleWorkspaceLayout role="lender" />}>
+              <Route index element={<LenderDashboardPage />} />
+              <Route path="marketplace" element={<LenderDashboardPage />} />
+              <Route path="offers" element={<LenderDashboardPage />} />
+              <Route path="financing" element={<LenderDashboardPage />} />
+              <Route path="repayments" element={<LenderDashboardPage />} />
+              <Route path="portfolio" element={<LenderDashboardPage />} />
+              <Route path="ledger" element={<LenderDashboardPage />} />
+              <Route path="organization" element={<LenderDashboardPage />} />
+              <Route path="settings" element={<LenderDashboardPage />} />
+            </Route>
           </Route>
 
           {/* ================= LEGACY DASHBOARD ROUTE ================= */}
