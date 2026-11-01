@@ -138,3 +138,66 @@ class InvoiceAPITests(APITestCase):
         invoice.refresh_from_db()
         self.assertEqual(invoice.status, Invoice.Status.DRAFT)
         self.assertEqual(invoice.version, 1)
+
+
+    def test_buyer_can_approve_invoice_and_history_is_saved(self):
+        invoice = Invoice.objects.create(
+            supplier_organization=self.supplier_org,
+            buyer_organization=self.buyer_org,
+            invoice_number="INV-BUYER-001",
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=20),
+            amount=Decimal("18000.00"),
+            currency="INR",
+            status=Invoice.Status.PENDING_VERIFICATION,
+        )
+        buyer = User.objects.create_user(
+            email="buyer@example.com",
+            password="TestPassword123!",
+            name="Buyer User",
+            organization=self.buyer_org,
+            role="buyer",
+            status="ACTIVE",
+            is_active=True,
+        )
+        self.client.force_authenticate(user=buyer)
+        response = self.client.post(
+            reverse("buyer-invoice-decision", kwargs={"pk": invoice.id}),
+            {"decision": "APPROVED", "comment": "", "version": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, Invoice.Status.ELIGIBLE_FOR_FINANCING)
+        self.assertEqual(invoice.version, 2)
+        self.assertEqual(response.data["verification"]["decision"], "APPROVED")
+
+    def test_buyer_rejection_requires_comment(self):
+        invoice = Invoice.objects.create(
+            supplier_organization=self.supplier_org,
+            buyer_organization=self.buyer_org,
+            invoice_number="INV-BUYER-002",
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=20),
+            amount=Decimal("18000.00"),
+            currency="INR",
+            status=Invoice.Status.PENDING_VERIFICATION,
+        )
+        buyer = User.objects.create_user(
+            email="buyer2@example.com",
+            password="TestPassword123!",
+            name="Buyer User",
+            organization=self.buyer_org,
+            role="buyer",
+            status="ACTIVE",
+            is_active=True,
+        )
+        self.client.force_authenticate(user=buyer)
+        response = self.client.post(
+            reverse("buyer-invoice-decision", kwargs={"pk": invoice.id}),
+            {"decision": "REJECTED", "comment": "", "version": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, Invoice.Status.PENDING_VERIFICATION)
