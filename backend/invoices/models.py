@@ -73,6 +73,7 @@ class VerificationEvent(models.Model):
         APPROVED = "APPROVED", "Approved"
         REJECTED = "REJECTED", "Rejected"
         CLARIFICATION = "CLARIFICATION", "Clarification Requested"
+        CLARIFICATION_RESPONSE = "CLARIFICATION_RESPONSE", "Supplier Clarification Response"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name="verification_events")
