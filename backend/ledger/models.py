@@ -26,6 +26,7 @@ class LedgerOutboxEvent(models.Model):
     next_attempt_at = models.DateTimeField(default=timezone.now)
     block_index = models.PositiveIntegerField(null=True, blank=True)
     block_hash = models.CharField(max_length=64, blank=True)
+    previous_hash = models.CharField(max_length=64, blank=True)
     last_error = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
