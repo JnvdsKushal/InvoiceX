@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import axios from "axios";
 import { Activity, ArrowDownRight, BadgeCheck, Clock3, FileCheck2, FileSearch, Landmark, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
 import api from "../../services/api";
 import type { Invoice, PaginatedResponse } from "../../types/invoice.types";
-import { useAuth } from "../../context/AuthContext";
 
 const money = (amount: string | number, currency = "INR") => new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: 0 }).format(Number(amount || 0));
 const date = (value: string) => value ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
@@ -15,7 +14,7 @@ const statusTone: Record<string,string> = {
   FUNDED: "bg-violet-50 text-violet-700", SETTLED: "bg-slate-100 text-slate-700",
 };
 function Status({ value }: {value:string}) { return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone[value] || "bg-slate-100 text-slate-600"}`}>{value.replaceAll("_"," ")}</span>; }
-function PageHeading({ eyebrow, title, description, action }: {eyebrow:string;title:string;description:string;action?:React.ReactNode}) {
+function PageHeading({ eyebrow, title, description, action }: {eyebrow:string;title:string;description:string;action?:import("react").ReactNode}) {
   return <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-semibold text-cyan-700">{eyebrow}</p><h2 className="mt-1 text-2xl font-bold text-slate-900">{title}</h2><p className="mt-1 text-sm text-slate-500">{description}</p></div>{action}</div>;
 }
 function Stat({label,value,sub,icon:Icon,tone="cyan"}:{label:string;value:string;sub:string;icon:typeof Activity;tone?:string}) {
@@ -30,14 +29,13 @@ function Table({rows,role}:{rows:Invoice[];role:"buyer"|"lender"}) {
 
 export default function WorkspacePage({role}:{role:"buyer"|"lender"}) {
   const location = useLocation();
-  const {user} = useAuth();
   const [invoices,setInvoices] = useState<Invoice[]>([]);
   const [loading,setLoading] = useState(false);
   const [error,setError] = useState("");
   const [query,setQuery] = useState("");
   const path = location.pathname.split("/").filter(Boolean)[1] || "overview";
   const buyer = role === "buyer";
-  const loadInvoices = async () => {
+  const loadInvoices = useCallback(async () => {
     setLoading(true); setError("");
     try {
       const response = await api.get<PaginatedResponse<Invoice>>("/invoices/");
@@ -45,8 +43,8 @@ export default function WorkspacePage({role}:{role:"buyer"|"lender"}) {
     } catch (err: unknown) {
       setError(axios.isAxiosError(err) ? (err.response?.data?.detail || "Could not load invoices from the API.") : "Could not load invoices.");
     } finally { setLoading(false); }
-  };
-  useEffect(()=>{ if (buyer) void loadInvoices(); },[buyer]);
+  }, []);
+  useEffect(()=>{ if (buyer) void loadInvoices(); },[buyer, loadInvoices]);
   const filtered = useMemo(()=>invoices.filter(item=>item.invoiceNumber.toLowerCase().includes(query.toLowerCase()) || (item.description || "").toLowerCase().includes(query.toLowerCase())),[invoices,query]);
   const pending = invoices.filter(x=>x.status==="PENDING_VERIFICATION");
   const verified = invoices.filter(x=>["VERIFIED","ELIGIBLE_FOR_FINANCING"].includes(x.status));
