@@ -30,6 +30,7 @@ export default function InvoiceFinancingDemoPage() {
   const [stage, setStage] = useState<Stage>("draft");
   const [invoiceHash, setInvoiceHash] = useState("");
   const [ledger, setLedger] = useState<LedgerEvent[]>([]);
+  const ledgerRef = useRef<LedgerEvent[]>([]);
   const [selectedOffer, setSelectedOffer] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -42,14 +43,17 @@ export default function InvoiceFinancingDemoPage() {
   const progress = stage === "draft" ? 0 : stage === "hashed" ? 1 : stage === "verified" ? 2 : 3;
   const stageLabel = useMemo(() => ({ draft: "Invoice prepared", hashed: "Hash created", verified: "Integrity verified", funded: "Demo funding completed" }[stage]), [stage]);
   async function addLedgerEvent(label: string, detail: string, payload: string) {
-    const previousHash = ledger.length ? ledger[ledger.length - 1].hash : "GENESIS";
+    const currentLedger = ledgerRef.current;
+    const previousHash = currentLedger.length ? currentLedger[currentLedger.length - 1].hash : "GENESIS";
     const time = new Date().toISOString();
     const hash = await sha256(JSON.stringify({ sequence: ledger.length + 1, label, detail, payload, previousHash, time }));
-    setLedger(current => [...current, { label, detail, hash, previousHash, time }]);
+    const nextLedger = [...ledgerRef.current, { label, detail, hash, previousHash, time }];
+    ledgerRef.current = nextLedger;
+    setLedger(nextLedger);
   }
   async function createHash() {
     if (!canHash) return;
-    setBusy(true); setError(""); setVerified(false); setSelectedOffer(""); setLedger([]);
+    setBusy(true); setError(""); setVerified(false); setSelectedOffer(""); ledgerRef.current = []; setLedger([]);
     try {
       const canonicalInvoice = { invoiceNumber: invoiceNumber.trim(), supplier: supplier.trim(), buyer: buyer.trim(), amount: numericAmount.toFixed(2), currency: "INR", dueDate, description: description.trim() };
       const hash = await sha256(JSON.stringify(canonicalInvoice));
@@ -88,7 +92,7 @@ export default function InvoiceFinancingDemoPage() {
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
   }
-  function reset() { setStage("draft"); setInvoiceHash(""); setLedger([]); setSelectedOffer(""); setVerified(false); setError(""); }
+  function reset() { setStage("draft"); setInvoiceHash(""); ledgerRef.current = []; setLedger([]); setSelectedOffer(""); setVerified(false); setError(""); }
   return <div className="min-h-screen bg-[#f5f8fc] text-slate-900">
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4 sm:px-8">
