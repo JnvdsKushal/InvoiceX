@@ -1,7 +1,7 @@
 from decimal import Decimal, ROUND_HALF_UP
 from django.utils import timezone
 from rest_framework import serializers
-from .models import FinancingOffer, FinancingAgreement, Repayment
+from .models import FinancingOffer, FinancingAgreement, Repayment, RepaymentReceipt
 
 
 class FinancingOfferSerializer(serializers.ModelSerializer):
@@ -62,15 +62,27 @@ class FinancingAgreementSerializer(serializers.ModelSerializer):
         fields = ("id", "offer", "invoice", "invoiceNumber", "lenderName", "supplierName", "principal_amount", "fee_amount", "interest_amount", "net_proceeds", "repayment_amount", "due_date", "status", "disbursement_reference", "funded_at", "created_at")
 
 
+class RepaymentReceiptSerializer(serializers.ModelSerializer):
+    recordedBy = serializers.CharField(source="recorded_by.name", read_only=True)
+
+    class Meta:
+        model = RepaymentReceipt
+        fields = ("id", "amount", "reference", "recordedBy", "created_at")
+
+
 class RepaymentSerializer(serializers.ModelSerializer):
     invoiceNumber = serializers.CharField(source="agreement.invoice.invoice_number", read_only=True)
     lenderName = serializers.CharField(source="agreement.lender_organization.name", read_only=True)
     supplierName = serializers.CharField(source="agreement.supplier_organization.name", read_only=True)
     outstanding = serializers.SerializerMethodField()
+    receipts = serializers.SerializerMethodField()
 
     class Meta:
         model = Repayment
-        fields = ("id", "agreement", "invoiceNumber", "lenderName", "supplierName", "amount_due", "amount_received", "outstanding", "due_date", "status", "payment_reference", "paid_at")
+        fields = ("id", "agreement", "invoiceNumber", "lenderName", "supplierName", "amount_due", "amount_received", "outstanding", "due_date", "status", "payment_reference", "paid_at", "receipts")
 
     def get_outstanding(self, obj):
         return str(obj.amount_due - obj.amount_received)
+
+    def get_receipts(self, obj):
+        return RepaymentReceiptSerializer(obj.receipts.select_related("recorded_by"), many=True).data
