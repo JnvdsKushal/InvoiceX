@@ -9,7 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from invoices.models import Invoice
-from .models import FinancingOffer, FinancingAgreement, Repayment
+from .models import FinancingOffer, FinancingAgreement, Repayment, RepaymentReceipt
 from .serializers import FinancingOfferSerializer, FinancingAgreementSerializer, RepaymentSerializer
 
 
@@ -201,6 +201,7 @@ class RecordRepaymentView(APIView):
             outstanding = repayment.amount_due - repayment.amount_received
             if received > outstanding:
                 return Response({"detail": "Received amount exceeds the outstanding balance."}, status=400)
+            RepaymentReceipt.objects.create(repayment=repayment, amount=received, reference=reference, recorded_by=request.user)
             repayment.amount_received += received
             repayment.payment_reference = reference
             if repayment.amount_received == repayment.amount_due:
