@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from organizations.models import Organization
 from .models import Invoice, VerificationEvent
 from .serializers import InvoiceSerializer
+from ledger.services import queue_ledger_event
 
 
 class Conflict(APIException):
@@ -41,7 +42,16 @@ class InvoiceListCreateView(generics.ListCreateAPIView):
             raise PermissionDenied("Only supplier users can create invoices.")
         if self.request.user.status != "ACTIVE" or self.request.user.organization.status != "ACTIVE":
             raise PermissionDenied("Your account and organization must be active.")
-        serializer.save()
+        with transaction.atomic():
+            invoice = serializer.save()
+            queue_ledger_event(
+                event_type="INVOICE_DRAFT_CREATED",
+                entity_type="invoice",
+                entity_id=invoice.id,
+                actor=self.request.user,
+                invoice=invoice,
+                payload={"status": invoice.status, "version": invoice.version, "currency": invoice.currency},
+            )
 
 
 class InvoiceDetailView(generics.RetrieveAPIView):
@@ -71,6 +81,14 @@ class SubmitInvoiceView(APIView):
             invoice.status = Invoice.Status.PENDING_VERIFICATION
             invoice.version += 1
             invoice.save(update_fields=["status", "version", "updated_at"])
+            queue_ledger_event(
+                event_type="INVOICE_SUBMITTED",
+                entity_type="invoice",
+                entity_id=invoice.id,
+                actor=request.user,
+                invoice=invoice,
+                payload={"status": invoice.status, "version": invoice.version},
+            )
         return Response(InvoiceSerializer(invoice, context={"request": request}).data)
 
 
@@ -110,6 +128,14 @@ class BuyerDecisionView(APIView):
                 invoice=invoice, actor=user, decision=decision, comment=comment,
                 previous_status=previous, new_status=invoice.status,
                 invoice_version=invoice.version,
+            )
+            queue_ledger_event(
+                event_type="BUYER_INVOICE_" + decision,
+                entity_type="invoice",
+                entity_id=invoice.id,
+                actor=user,
+                invoice=invoice,
+                payload={"decision": decision, "status": invoice.status, "version": invoice.version},
             )
         return Response({
             "invoice": InvoiceSerializer(invoice, context={"request": request}).data,
