@@ -78,7 +78,7 @@ class VerificationEvent(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name="verification_events")
     actor = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="invoice_verification_events")
-    decision = models.CharField(max_length=20, choices=Decision.choices)
+    decision = models.CharField(max_length=30, choices=Decision.choices)
     comment = models.TextField(blank=True)
     previous_status = models.CharField(max_length=30)
     new_status = models.CharField(max_length=30)
