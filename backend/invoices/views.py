@@ -148,6 +148,64 @@ class BuyerDecisionView(APIView):
         })
 
 
+class SupplierClarificationResponseView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        user = request.user
+        if user.role != "supplier" or user.status != "ACTIVE" or user.organization.status != "ACTIVE":
+            raise PermissionDenied("An active supplier account is required.")
+
+        comment = str(request.data.get("comment", "")).strip()
+        version = request.data.get("version")
+        if not comment:
+            return Response({"detail": "Please provide a response to the buyer's clarification."}, status=400)
+        if len(comment) > 5000:
+            return Response({"detail": "The response must be 5,000 characters or fewer."}, status=400)
+        if isinstance(version, bool) or not isinstance(version, int):
+            return Response({"detail": "A valid invoice version is required."}, status=400)
+
+        invoice = get_object_or_404(visible_invoices(user), pk=pk)
+        with transaction.atomic():
+            invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
+            if invoice.version != version:
+                raise Conflict("STALE_VERSION: Reload the invoice before responding.")
+            if invoice.status != Invoice.Status.NEEDS_CLARIFICATION:
+                raise Conflict("This invoice is not currently awaiting a supplier clarification response.")
+
+            previous = invoice.status
+            invoice.version += 1
+            invoice.save(update_fields=["version", "updated_at"])
+            event = VerificationEvent.objects.create(
+                invoice=invoice,
+                actor=user,
+                decision=VerificationEvent.Decision.CLARIFICATION_RESPONSE,
+                comment=comment,
+                previous_status=previous,
+                new_status=invoice.status,
+                invoice_version=invoice.version,
+            )
+            queue_ledger_event(
+                event_type="SUPPLIER_CLARIFICATION_RESPONDED",
+                entity_type="invoice",
+                entity_id=invoice.id,
+                actor=user,
+                invoice=invoice,
+                payload={"status": invoice.status, "version": invoice.version, "response_event_id": str(event.id)},
+            )
+
+        return Response({
+            "invoice": InvoiceSerializer(invoice, context={"request": request}).data,
+            "response": {
+                "id": str(event.id),
+                "comment": event.comment,
+                "invoiceVersion": event.invoice_version,
+                "createdAt": event.created_at,
+                "actorName": user.name,
+            },
+        })
+
+
 class VerificationHistoryView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
