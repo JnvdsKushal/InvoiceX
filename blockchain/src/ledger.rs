@@ -161,3 +161,103 @@ impl Ledger {
         self.blocks.len()
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_path(label: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("invoicex-{label}-{nonce}.json"))
+    }
+
+    fn append(ledger: &mut Ledger, event_id: &str) {
+        ledger
+            .add_event(
+                1,
+                event_id.to_string(),
+                "INVOICE_CREATED".to_string(),
+                "invoice".to_string(),
+                "invoice-test-001".to_string(),
+                "actor-test-001".to_string(),
+                json!({"status": "DRAFT", "version": 1}),
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn new_ledger_contains_valid_genesis_block() {
+        let path = temp_path("genesis");
+        let ledger = Ledger::load_or_create(&path).unwrap();
+        assert_eq!(ledger.count(), 1);
+        assert!(ledger.validate());
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn appended_event_links_to_previous_hash() {
+        let path = temp_path("append");
+        let mut ledger = Ledger::load_or_create(&path).unwrap();
+        append(&mut ledger, "event-1");
+        assert_eq!(ledger.count(), 2);
+        assert_eq!(ledger.blocks[1].previous_hash, ledger.blocks[0].hash);
+        assert!(ledger.validate());
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn tampered_payload_is_detected() {
+        let path = temp_path("tamper");
+        let mut ledger = Ledger::load_or_create(&path).unwrap();
+        append(&mut ledger, "event-1");
+        ledger.blocks[1].payload = json!({"status": "ALTERED"});
+        assert!(!ledger.validate());
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn ledger_survives_reload() {
+        let path = temp_path("reload");
+        {
+            let mut ledger = Ledger::load_or_create(&path).unwrap();
+            append(&mut ledger, "event-1");
+        }
+        let restored = Ledger::load_or_create(&path).unwrap();
+        assert_eq!(restored.count(), 2);
+        assert!(restored.validate());
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn duplicate_event_id_is_rejected() {
+        let path = temp_path("duplicate");
+        let mut ledger = Ledger::load_or_create(&path).unwrap();
+        append(&mut ledger, "event-1");
+        let result = ledger.add_event(
+            2,
+            "event-1".to_string(),
+            "INVOICE_UPDATED".to_string(),
+            "invoice".to_string(),
+            "invoice-test-001".to_string(),
+            "actor-test-001".to_string(),
+            json!({"status": "VERIFIED"}),
+        );
+        assert!(result.is_err());
+        assert_eq!(ledger.count(), 2);
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn corrupted_persisted_ledger_is_rejected() {
+        let path = temp_path("corrupt");
+        fs::write(&path, "not valid json").unwrap();
+        assert!(Ledger::load_or_create(&path).is_err());
+        let _ = fs::remove_file(path);
+    }
+}
