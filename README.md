@@ -5,7 +5,7 @@ InvoiceX is a fintech platform designed to help Micro, Small and Medium Enterpri
 
 The platform aims to improve transparency, traceability, and operational efficiency throughout the invoice lifecycle using a modern web architecture, secure backend APIs, PostgreSQL, and a Rust-based hash-linked ledger for tamper-evident event history.
 
-> **Project status:** Under active development. Core backend foundations, invoice workflow groundwork, and the initial Rust ledger are implemented. Full document processing, email verification, lender financing, settlement, and ledger-service integration remain in development.
+> **Project status:** Under active development. Supplier invoice creation/submission, buyer verification, lender offers, funding-confirmation and repayment-recording APIs, a transactional ledger outbox, and the Rust hash-linked ledger service are implemented on the `feature/buyer-lender-workspaces` branch. The end-to-end environment setup and browser build are being verified. OCR, email delivery, payment-gateway integration, and production hardening remain pending.
 
 ---
 
@@ -886,3 +886,23 @@ InvoiceX aims to make invoice financing more transparent and traceable by combin
 By bringing suppliers, buyers, and lenders into a common workflow, the project seeks to help MSMEs manage outstanding invoices and pursue working-capital financing more efficiently.
 
 **InvoiceX — Making invoice financing more transparent, traceable, and accessible.**
+
+## Buyer and lender workflow APIs
+
+The buyer workspace supports invoice review, approval, rejection, clarification requests, verification history, and a supplier directory. Buyer approval transitions an invoice to `ELIGIBLE_FOR_FINANCING`.
+
+The lender workspace supports an eligible-invoice marketplace, offer creation and withdrawal, financing agreements, manual disbursement confirmation, repayment recording, receipt history, and portfolio summaries. Recording a disbursement or repayment is an operational confirmation only; it does not itself transfer money. Connect a regulated payment/banking provider before treating these actions as automated financial settlement.
+
+## Rust ledger event delivery
+
+Django writes important workflow events to a PostgreSQL outbox in the same database transaction as the business change. The worker retries delivery to the Rust service and stores the acknowledged block index, hash, and previous hash.
+
+Configure `LEDGER_SERVICE_URL` and `LEDGER_INTERNAL_API_KEY` in `backend/.env`. The same API key must be set for the Rust process. Start the Rust service on port 8081, then run the outbox dispatcher from the backend directory:
+
+```bash
+python manage.py migrate
+python manage.py dispatch_ledger_events --loop --interval 5
+```
+
+The dispatcher can also be run once without `--loop`. Pending and failed events remain in the outbox and are retried with backoff. The ledger dashboard distinguishes pending, failed, and delivered events; only delivered entries have a block hash.
+
