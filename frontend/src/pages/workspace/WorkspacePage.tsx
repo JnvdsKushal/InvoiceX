@@ -39,11 +39,11 @@ export default function WorkspacePage({role}:{role:"buyer"|"lender"}) {
   setLoading(true);setError("");
   try{
    if(buyer){
-    const results=await Promise.all([api.get<PaginatedResponse<Invoice>>("/invoices/"),api.get<HistoryRow[]>("/invoices/verification-history/"),api.get<Supplier[]>("/invoices/suppliers/")]);
-    setInvoices(results[0].data.results||[]);setHistory(results[1].data||[]);setSuppliers(results[2].data||[]);
+    const results=await Promise.all([api.get<PaginatedResponse<Invoice>>("/invoices/"),api.get<HistoryRow[]>("/invoices/verification-history/"),api.get<Supplier[]>("/invoices/suppliers/"),api.get<LedgerEvent[]>("/ledger/events/")]);
+    setInvoices(results[0].data.results||[]);setHistory(results[1].data||[]);setSuppliers(results[2].data||[]);setLedgerEvents(results[3].data||[]);
    }else{
-    const results=await Promise.all([api.get<Opportunity[]>("/financing/marketplace/"),api.get<Offer[]>("/financing/offers/"),api.get<Agreement[]>("/financing/agreements/"),api.get<Repayment[]>("/financing/repayments/")]);
-    setMarket(results[0].data||[]);setOffers(results[1].data||[]);setAgreements(results[2].data||[]);setRepayments(results[3].data||[]);
+    const results=await Promise.all([api.get<Opportunity[]>("/financing/marketplace/"),api.get<Offer[]>("/financing/offers/"),api.get<Agreement[]>("/financing/agreements/"),api.get<Repayment[]>("/financing/repayments/"),api.get<LedgerEvent[]>("/ledger/events/")]);
+    setMarket(results[0].data||[]);setOffers(results[1].data||[]);setAgreements(results[2].data||[]);setRepayments(results[3].data||[]);setLedgerEvents(results[4].data||[]);
    }
   }catch(e){setError(fail(e));}finally{setLoading(false);}
  },[buyer]);
