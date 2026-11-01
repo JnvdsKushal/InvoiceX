@@ -175,6 +175,9 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
+# Invoice files are private and must be served only through authenticated API views.
+MEDIA_ROOT = BASE_DIR / "private_media"
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
