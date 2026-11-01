@@ -12,6 +12,7 @@ type Opportunity={id:string;invoiceNumber:string;supplierName:string;buyerName:s
 type Offer={id:string;invoice:string;invoiceNumber:string;invoiceAmount:string;currency:string;supplierName:string;advance_percentage:string;fee_percentage:string;annual_interest_rate:string;repayment_days:number;expires_at:string;status:string;advanceAmount:string;feeAmount:string};
 type Agreement={id:string;invoiceNumber:string;supplierName:string;principal_amount:string;fee_amount:string;interest_amount:string;net_proceeds:string;repayment_amount:string;due_date:string;status:string;disbursement_reference:string};
 type Repayment={id:string;invoiceNumber:string;amount_due:string;amount_received:string;outstanding:string;due_date:string;status:string};
+type LedgerEvent={id:string;eventId:string;eventType:string;entityType:string;entityId:string;status:string;sequence:number|null;hash:string;previousHash:string;actor:string;createdAt:string;deliveredAt:string|null;lastError:string};
 
 const cash=(n:string|number,c="INR")=>new Intl.NumberFormat("en-IN",{style:"currency",currency:c,maximumFractionDigits:2}).format(Number(n||0));
 const day=(v:string)=>v?new Date(v).toLocaleDateString("en-IN"):"—";
@@ -25,6 +26,9 @@ export default function WorkspacePage({role}:{role:"buyer"|"lender"}) {
  const buyer=role==="buyer", location=useLocation(), path=location.pathname.split("/").filter(Boolean)[1]||"overview", {user}=useAuth();
  const [invoices,setInvoices]=useState<Invoice[]>([]),[history,setHistory]=useState<HistoryRow[]>([]),[suppliers,setSuppliers]=useState<Supplier[]>([]);
  const [market,setMarket]=useState<Opportunity[]>([]),[offers,setOffers]=useState<Offer[]>([]),[agreements,setAgreements]=useState<Agreement[]>([]),[repayments,setRepayments]=useState<Repayment[]>([]);
+ const [ledgerEvents,setLedgerEvents]=useState<LedgerEvent[]>([]);
+ const [chainState,setChainState]=useState<{available:boolean;valid:boolean|null;totalBlocks:number;detail?:string}|null>(null);
+ const [verifying,setVerifying]=useState(false);
  const [loading,setLoading]=useState(true),[error,setError]=useState(""),[notice,setNotice]=useState(""),[search,setSearch]=useState("");
  const [selected,setSelected]=useState<Invoice|null>(null),[comment,setComment]=useState(""),[busy,setBusy]=useState("");
  const [offerInvoice,setOfferInvoice]=useState<Opportunity|null>(null);
@@ -58,6 +62,12 @@ export default function WorkspacePage({role}:{role:"buyer"|"lender"}) {
    await api.post("/financing/offers/",{invoice:offerInvoice.id,advance_percentage:terms.advance,fee_percentage:terms.fee,annual_interest_rate:terms.interest,repayment_days:Number(terms.days),expires_at:expiry});
    setOfferInvoice(null);setNotice("Offer published.");await load();
   }catch(e){setError(fail(e));}finally{setBusy("");}
+ };
+ const verifyChain=async()=>{
+  setVerifying(true);setError("");setChainState(null);
+  try{const response=await api.get("/ledger/verify/");setChainState(response.data);}
+  catch(e){setChainState({available:false,valid:null,totalBlocks:0,detail:fail(e)});}
+  finally{setVerifying(false);}
  };
  const withdrawOffer=async(id:string)=>{
   if(!window.confirm("Withdraw this offer? Suppliers will no longer be able to accept it."))return;
@@ -97,7 +107,7 @@ export default function WorkspacePage({role}:{role:"buyer"|"lender"}) {
 
   {buyer&&path==="suppliers"&&<section className="rounded-2xl border bg-white p-5"><h2 className="font-bold">Suppliers who have submitted invoices</h2><div className="mt-4">{suppliers.length?<Table><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Organization</th><th className="p-3">Registration ID</th><th className="p-3">Invoices</th><th className="p-3">Status</th></tr></thead><tbody>{suppliers.map(s=><tr key={s.id} className="border-t"><td className="p-3 font-semibold">{s.name}</td><td className="p-3">{s.registrationIdentifier||"—"}</td><td className="p-3">{s.invoiceCount}</td><td className="p-3"><span className={pill(s.status)}>{badge(s.status)}</span></td></tr>)}</tbody></Table>:<Empty text="No supplier has submitted an invoice to your organization yet."/>}</div></section>}
 
-  {buyer&&path==="ledger"&&<section className="rounded-2xl border bg-white p-5"><h2 className="font-bold">Verification event audit trail</h2><p className="mt-1 text-sm text-amber-700">These are persisted database verification records. They are not cryptographic block hashes; Rust ledger delivery still needs to be connected.</p>{history.map(h=><div key={h.id} className="flex flex-wrap justify-between gap-2 border-b py-3"><div><p className="font-semibold">{h.invoiceNumber} · {h.decision}</p><p className="text-xs text-slate-500">{stamp(h.createdAt)} · {h.actorName}</p></div><span className={pill(h.newStatus)}>{badge(h.newStatus)}</span></div>)}</section>}
+  {(path==="ledger")&&<section className="rounded-2xl border bg-white p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-bold">Cryptographic ledger events</h2><p className="mt-1 text-sm text-slate-500">Events are queued transactionally in Django and delivered to the Rust hash-linked ledger by the outbox worker.</p></div><button disabled={verifying} onClick={()=>void verifyChain()} className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{verifying?"Verifying…":"Verify entire chain"}</button></div>{chainState&&<div className={"mt-4 rounded-xl border p-3 text-sm "+(chainState.available&&chainState.valid?"border-emerald-200 bg-emerald-50 text-emerald-800":"border-amber-200 bg-amber-50 text-amber-800")}>{chainState.available?"Chain "+(chainState.valid?"is valid":"verification failed")+" · "+chainState.totalBlocks+" blocks":(chainState.detail||"Ledger service is unavailable.")}</div>}<div className="mt-5 space-y-3">{ledgerEvents.map(e=><div key={e.id} className="rounded-xl border border-slate-200 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-semibold text-slate-900">{e.eventType.replaceAll("_"," ")}</p><p className="mt-1 text-xs text-slate-500">{e.entityType} · {e.entityId} · {e.actor} · {stamp(e.createdAt)}</p></div><span className={pill(e.status)}>{badge(e.status)}</span></div>{e.status==="DELIVERED"?<div className="mt-3 space-y-2 text-xs"><p><span className="font-semibold">Block:</span> {e.sequence}</p><p className="break-all"><span className="font-semibold">Hash:</span> {e.hash}</p><p className="break-all"><span className="font-semibold">Previous hash:</span> {e.previousHash}</p></div>:<p className="mt-2 text-xs text-slate-500">{e.status==="FAILED"?(e.lastError||"Delivery failed; retry scheduled."):"Waiting for the ledger dispatch worker."}</p>}</div>)}{!ledgerEvents.length&&<Empty text="No ledger events yet. Invoice creation, submission, buyer decisions and financing actions will appear here."/ >}</div></section>}
 
   {buyer&&(path==="organization"||path==="settings")&&<Profile user={user} role="Buyer"/>}
 
