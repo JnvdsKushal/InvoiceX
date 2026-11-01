@@ -76,6 +76,8 @@ db.sqlite3-journal
 *.sqlite3
 *.sqlite3-journal
 media/
+private_media/
+backend/private_media/
 staticfiles/
 
 # ----------------------------
