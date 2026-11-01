@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("invoices", "0002_verificationevent"),
+        ("invoices", "0004_verificationevent"),
         ("financing", "0002_repaymentreceipt"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
