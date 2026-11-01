@@ -30,23 +30,12 @@ import AdminSettingsPage from "./pages/admin/AdminSettingsPage";
 import SupplierLayout from "./components/supplier/SupplierLayout";
 import RoleWorkspaceLayout from "./components/workspace/RoleWorkspaceLayout";
 import SupplierOverviewPage from "./pages/supplier/SupplierOverviewPage";
-import SupplierModulePage from "./components/supplier/SupplierModulePage";
+import SupplierWorkspacePage from "./pages/supplier/SupplierWorkspacePage";
 
 // Supplier invoice management pages
 import CreateInvoicePage from "./pages/supplier/CreateInvoicePage";
 import MyInvoicesPage from "./pages/supplier/MyInvoicesPage";
 import InvoiceDetailsPage from "./pages/supplier/InvoiceDetailsPage";
-
-// Supplier module icons
-import {
-  BadgeCheck,
-  Landmark,
-  Wallet,
-  CalendarClock,
-  ShieldCheck,
-  Building2,
-  Settings,
-} from "lucide-react";
 
 // Other role dashboards
 import BuyerDashboardPage from "./pages/buyer/BuyerDashboardPage";
@@ -148,158 +137,15 @@ export default function App() {
                 element={<InvoiceDetailsPage />}
               />
 
-              {/* Verification tracking */}
-
-              <Route
-                path="verification"
-                element={
-                  <SupplierModulePage
-                    title="Verification Tracking"
-                    description="Follow buyer decisions and invoice verification."
-                    icon={BadgeCheck}
-                    features={[
-                      "Pending Verification",
-                      "Verified Invoices",
-                      "Rejected Invoices",
-                      "Clarification Requests",
-                      "Buyer Comments",
-                      "Verification Timeline",
-                    ]}
-                    integrationNote="Buyer decisions and verification events will be retrieved from Django and linked to the corresponding ledger events."
-                  />
-                }
-              />
-
-              {/* Financing marketplace */}
-
-              <Route
-                path="marketplace"
-                element={
-                  <SupplierModulePage
-                    title="Financing Marketplace"
-                    description="Discover financing offers for eligible invoices."
-                    icon={Landmark}
-                    features={[
-                      "Eligible Invoices",
-                      "Available Lenders",
-                      "Offer Comparison",
-                      "Advance Percentage",
-                      "Fees & Repayment Terms",
-                      "Accept or Reject Offers",
-                    ]}
-                    integrationNote="Financing offers will be supplied by the lender APIs. Offer acceptance will be validated and recorded by Django before a ledger event is created."
-                  />
-                }
-              />
-
-              {/* My financing */}
-
-              <Route
-                path="financing"
-                element={
-                  <SupplierModulePage
-                    title="My Financing"
-                    description="Track accepted offers and funding disbursements."
-                    icon={Wallet}
-                    features={[
-                      "Accepted Offers",
-                      "Funding Requests",
-                      "Disbursement Status",
-                      "Amount Received",
-                      "Lender Information",
-                      "Settlement History",
-                    ]}
-                    integrationNote="This page will display actual financing agreements and confirmed disbursement records from the backend."
-                  />
-                }
-              />
-
-              {/* Repayments */}
-
-              <Route
-                path="repayments"
-                element={
-                  <SupplierModulePage
-                    title="Repayments"
-                    description="Track upcoming and completed repayment obligations."
-                    icon={CalendarClock}
-                    features={[
-                      "Upcoming Repayments",
-                      "Amounts Due",
-                      "Payment History",
-                      "Overdue Tracking",
-                      "Receipts",
-                      "Settlement Status",
-                    ]}
-                    integrationNote="Repayment schedules and payment confirmations will come from the financial transaction system. Ledger records will provide a tamper-evident event history."
-                  />
-                }
-              />
-
-              {/* Blockchain ledger */}
-
-              <Route
-                path="ledger"
-                element={
-                  <SupplierModulePage
-                    title="Blockchain Ledger"
-                    description="Inspect the integrity and history of your invoice records."
-                    icon={ShieldCheck}
-                    features={[
-                      "Invoice Creation Events",
-                      "Submission Hashes",
-                      "Buyer Verification Events",
-                      "Financing Events",
-                      "Repayment Events",
-                      "Integrity Verification",
-                    ]}
-                    integrationNote="This page will connect to the Rust Axum ledger service through Django. It will display sequence numbers, timestamps, previous hashes, event hashes and verification results."
-                  />
-                }
-              />
-
-              {/* Organization profile */}
-
-              <Route
-                path="organization"
-                element={
-                  <SupplierModulePage
-                    title="Organization Profile"
-                    description="Manage your MSME organization information."
-                    icon={Building2}
-                    features={[
-                      "Organization Details",
-                      "Registration Information",
-                      "Contact Information",
-                      "Verification Status",
-                      "Organization Documents",
-                      "Authorized Users",
-                    ]}
-                    integrationNote="Organization information will be retrieved from the authenticated user's organization record. Sensitive changes will require backend authorization."
-                  />
-                }
-              />
-
-              {/* Supplier settings */}
-
-              <Route
-                path="settings"
-                element={
-                  <SupplierModulePage
-                    title="Supplier Settings"
-                    description="Manage personal preferences and account security."
-                    icon={Settings}
-                    features={[
-                      "Personal Profile",
-                      "Change Password",
-                      "Notification Preferences",
-                      "Security Information",
-                      "Session Management",
-                    ]}
-                    integrationNote="Profile and security changes will be connected to dedicated authenticated account APIs."
-                  />
-                }
-              />
+              {/* Live supplier operational workspaces */}
+              <Route path="verification" element={<SupplierWorkspacePage />} />
+              <Route path="marketplace" element={<SupplierWorkspacePage />} />
+              <Route path="financing" element={<SupplierWorkspacePage />} />
+              <Route path="repayments" element={<SupplierWorkspacePage />} />
+              <Route path="ledger" element={<SupplierWorkspacePage />} />
+              {/* Profile and preferences are intentionally kept as next-phase work. */}
+              <Route path="organization" element={<SupplierWorkspacePage />} />
+              <Route path="settings" element={<SupplierWorkspacePage />} />
             </Route>
           </Route>
 
