@@ -6,6 +6,7 @@ from .views import (
     InvoiceDetailView,
     InvoiceListCreateView,
     SubmitInvoiceView,
+    SupplierClarificationResponseView,
     VerificationHistoryView,
 )
 
@@ -16,4 +17,5 @@ urlpatterns = [
     path("<uuid:pk>/", InvoiceDetailView.as_view(), name="invoice-detail"),
     path("<uuid:pk>/submit", SubmitInvoiceView.as_view(), name="invoice-submit"),
     path("<uuid:pk>/decision/", BuyerDecisionView.as_view(), name="buyer-invoice-decision"),
+    path("<uuid:pk>/clarification-response/", SupplierClarificationResponseView.as_view(), name="supplier-clarification-response"),
 ]
