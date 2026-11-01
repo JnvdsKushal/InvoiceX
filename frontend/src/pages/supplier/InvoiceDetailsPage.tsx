@@ -19,6 +19,9 @@ export default function InvoiceDetailsPage() {
   const [error, setError] = useState("");
   const [clarificationEvents, setClarificationEvents] = useState<Array<{ id: string; decision: string; comment: string; createdAt: string; actorName: string; invoiceId: string }>>([]);
   const [clarificationReply, setClarificationReply] = useState("");
+  const [documents, setDocuments] = useState<Array<{id:string;filename:string;fileType:string;size:number;sha256:string;uploadedBy:string;createdAt:string}>>([]);
+  const [uploading, setUploading] = useState(false);
+  const [documentError, setDocumentError] = useState("");
   const [replying, setReplying] = useState(false);
   const [notice, setNotice] = useState(
     (location.state as { message?: string } | null)?.message || ""
@@ -33,6 +36,12 @@ export default function InvoiceDetailsPage() {
     try {
       const data = await invoiceService.getInvoice(id);
       setInvoice(data);
+      try {
+        const documentResponse = await api.get<Array<{id:string;filename:string;fileType:string;size:number;sha256:string;uploadedBy:string;createdAt:string}>>("/invoices/" + id + "/documents/");
+        setDocuments(documentResponse.data);
+      } catch {
+        setDocuments([]);
+      }
       try {
         const history = await api.get<Array<{ id: string; decision: string; comment: string; createdAt: string; actorName: string; invoiceId: string }>>("/invoices/verification-history/");
         setClarificationEvents(history.data.filter((event) => event.invoiceId === id));
@@ -92,6 +101,49 @@ export default function InvoiceDetailsPage() {
     }
   }
 
+
+
+  async function handleDocumentUpload(file?: File) {
+    if (!invoice || !id || !file) return;
+    setUploading(true);
+    setDocumentError("");
+    setError("");
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const response = await api.post("/invoices/" + id + "/documents/", body, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setDocuments((current) => [response.data, ...current]);
+      setNotice("Document uploaded. Its SHA-256 checksum has been recorded in the ledger event queue.");
+    } catch (err) {
+      setDocumentError(
+        axios.isAxiosError(err) && typeof err.response?.data?.detail === "string"
+          ? err.response.data.detail
+          : "Unable to upload this document. Check the file and try again."
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleDocumentDownload(document: {id:string;filename:string}) {
+    if (!id) return;
+    setDocumentError("");
+    try {
+      const response = await api.get("/invoices/" + id + "/documents/" + document.id + "/download/", { responseType: "blob" });
+      const url = window.URL.createObjectURL(response.data);
+      const anchor = window.document.createElement("a");
+      anchor.href = url;
+      anchor.download = document.filename;
+      window.document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      setDocumentError("Unable to download this document. You may not have access or the file is unavailable.");
+    }
+  }
 
   async function handleClarificationReply() {
     if (!invoice || !id || !clarificationReply.trim()) return;
@@ -256,6 +308,49 @@ export default function InvoiceDetailsPage() {
           </button>
         )}
 
+      </section>
+
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Invoice documents</h2>
+            <p className="mt-1 text-sm text-slate-500">Private PDF, JPG or PNG files. Maximum size: 10 MB per file.</p>
+          </div>
+          {["DRAFT", "NEEDS_CLARIFICATION"].includes(invoice.status) && (
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white">
+              <Send size={15} /> {uploading ? "Uploading…" : "Upload document"}
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                className="hidden"
+                disabled={uploading}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  void handleDocumentUpload(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+          )}
+        </div>
+        {documentError && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{documentError}</p>}
+        <div className="mt-4 space-y-3">
+          {documents.map((document) => (
+            <div key={document.id} className="rounded-xl border border-slate-100 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="break-all text-sm font-semibold text-slate-900">{document.filename}</p>
+                  <p className="mt-1 text-xs text-slate-500">{document.fileType} · {(document.size / 1024).toFixed(1)} KB · Uploaded by {document.uploadedBy}</p>
+                </div>
+                <button onClick={() => void handleDocumentDownload(document)} className="text-sm font-semibold text-teal-700">Download</button>
+              </div>
+              <p className="mt-3 break-all font-mono text-[11px] text-slate-500">SHA-256: {document.sha256}</p>
+            </div>
+          ))}
+          {!documents.length && <p className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">No supporting documents uploaded yet.</p>}
+        </div>
+        <p className="mt-4 text-xs text-slate-500">Files are served through authenticated invoice-scoped endpoints, not public media URLs. OCR extraction is not enabled yet.</p>
       </section>
 
       {invoice.status === "NEEDS_CLARIFICATION" && (
