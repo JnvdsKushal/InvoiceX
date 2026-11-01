@@ -45,6 +45,19 @@ class OfferListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        if request.user.role not in ("supplier", "lender") or request.user.status != "ACTIVE" or not request.user.organization.status == "ACTIVE":
+            raise PermissionDenied("An active supplier or lender account is required.")
+        FinancingOffer.objects.filter(
+            lender_organization=request.user.organization,
+            status=FinancingOffer.Status.ACTIVE,
+            expires_at__lte=timezone.now(),
+        ).update(status=FinancingOffer.Status.EXPIRED)
+        if request.user.role == "supplier":
+            FinancingOffer.objects.filter(
+                invoice__supplier_organization=request.user.organization,
+                status=FinancingOffer.Status.ACTIVE,
+                expires_at__lte=timezone.now(),
+            ).update(status=FinancingOffer.Status.EXPIRED)
         return Response(FinancingOfferSerializer(offer_queryset(request.user), many=True).data)
 
     def post(self, request):
@@ -85,6 +98,9 @@ class AcceptOfferView(APIView):
             agreement = FinancingAgreement.objects.create(offer=offer, invoice=invoice, supplier_organization=invoice.supplier_organization, lender_organization=offer.lender_organization, principal_amount=principal, fee_amount=fee, interest_amount=interest, net_proceeds=principal-fee, repayment_amount=principal+interest, due_date=timezone.localdate()+timedelta(days=offer.repayment_days))
             offer.status = FinancingOffer.Status.ACCEPTED
             offer.save(update_fields=["status"])
+            FinancingOffer.objects.filter(
+                invoice=invoice, status=FinancingOffer.Status.ACTIVE
+            ).exclude(pk=offer.pk).update(status=FinancingOffer.Status.WITHDRAWN)
             invoice.status = Invoice.Status.FUNDING_PENDING
             invoice.version += 1
             invoice.save(update_fields=["status", "version", "updated_at"])
@@ -96,9 +112,9 @@ class AgreementListView(APIView):
 
     def get(self, request):
         qs = FinancingAgreement.objects.select_related("invoice", "supplier_organization", "lender_organization")
-        if request.user.role == "supplier":
+        if request.user.role == "supplier" and request.user.status == "ACTIVE":
             qs = qs.filter(supplier_organization=request.user.organization)
-        elif request.user.role == "lender":
+        elif request.user.role == "lender" and request.user.status == "ACTIVE":
             qs = qs.filter(lender_organization=request.user.organization)
         else:
             raise PermissionDenied("Supplier or lender access is required.")
@@ -135,9 +151,9 @@ class RepaymentListView(APIView):
 
     def get(self, request):
         qs = Repayment.objects.select_related("agreement", "agreement__invoice", "agreement__supplier_organization", "agreement__lender_organization")
-        if request.user.role == "supplier":
+        if request.user.role == "supplier" and request.user.status == "ACTIVE":
             qs = qs.filter(agreement__supplier_organization=request.user.organization)
-        elif request.user.role == "lender":
+        elif request.user.role == "lender" and request.user.status == "ACTIVE":
             qs = qs.filter(agreement__lender_organization=request.user.organization)
         else:
             raise PermissionDenied("Supplier or lender access is required.")
