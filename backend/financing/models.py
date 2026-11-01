@@ -80,3 +80,15 @@ class Repayment(models.Model):
 
     class Meta:
         ordering = ["due_date"]
+
+
+class RepaymentReceipt(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    repayment = models.ForeignKey(Repayment, on_delete=models.PROTECT, related_name="receipts")
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    reference = models.CharField(max_length=120)
+    recorded_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="recorded_repayment_receipts")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
