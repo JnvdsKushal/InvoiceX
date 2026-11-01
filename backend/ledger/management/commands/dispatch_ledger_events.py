@@ -66,6 +66,7 @@ class Command(BaseCommand):
                     status=LedgerOutboxEvent.Status.DELIVERED,
                     block_index=block.get("index"),
                     block_hash=block["hash"],
+                    previous_hash=block.get("previous_hash", ""),
                     delivered_at=timezone.now(),
                     last_error="",
                     attempts=event.attempts + 1,
