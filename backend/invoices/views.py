@@ -1,4 +1,8 @@
+import hashlib
+from pathlib import Path
+
 from django.db import IntegrityError, transaction
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 
 from rest_framework import generics, status
@@ -8,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from organizations.models import Organization
-from .models import Invoice, VerificationEvent
+from .models import Invoice, InvoiceDocument, VerificationEvent
 from .serializers import InvoiceSerializer
 from ledger.services import queue_ledger_event
 
@@ -60,6 +64,118 @@ class InvoiceDetailView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         return visible_invoices(self.request.user)
+
+
+class InvoiceDocumentsView(APIView):
+    permission_classes = [IsAuthenticated]
+    MAX_FILE_SIZE = 10 * 1024 * 1024
+    ALLOWED = {
+        ".pdf": ("PDF", b"%PDF-"),
+        ".jpg": ("JPEG", b"\\xff\\xd8\\xff"),
+        ".jpeg": ("JPEG", b"\\xff\\xd8\\xff"),
+        ".png": ("PNG", b"\\x89PNG\\r\\n\\x1a\\n"),
+    }
+
+    def get_invoice(self, request, pk):
+        if request.user.role not in ["supplier", "buyer"]:
+            raise PermissionDenied("Only the invoice supplier and buyer can access documents.")
+        return get_object_or_404(visible_invoices(request.user), pk=pk)
+
+    def get(self, request, pk):
+        invoice = self.get_invoice(request, pk)
+        documents = invoice.documents.select_related("uploaded_by").all()
+        return Response([{
+            "id": str(doc.id),
+            "filename": doc.original_filename,
+            "fileType": doc.file_type,
+            "size": doc.file_size,
+            "sha256": doc.sha256,
+            "uploadedBy": doc.uploaded_by.name,
+            "createdAt": doc.created_at,
+        } for doc in documents])
+
+    def post(self, request, pk):
+        user = request.user
+        if user.role != "supplier" or user.status != "ACTIVE" or user.organization.status != "ACTIVE":
+            raise PermissionDenied("An active supplier account is required to upload invoice documents.")
+        invoice = self.get_invoice(request, pk)
+        if invoice.status not in [Invoice.Status.DRAFT, Invoice.Status.NEEDS_CLARIFICATION]:
+            raise Conflict("Documents can only be added while the invoice is a draft or awaiting clarification.")
+
+        uploaded = request.FILES.get("file")
+        if uploaded is None:
+            return Response({"detail": "Choose a PDF, JPG or PNG file to upload."}, status=400)
+        if uploaded.size <= 0 or uploaded.size > self.MAX_FILE_SIZE:
+            return Response({"detail": "Files must be between 1 byte and 10 MB."}, status=400)
+
+        extension = Path(uploaded.name).suffix.lower()
+        file_info = self.ALLOWED.get(extension)
+        if file_info is None:
+            return Response({"detail": "Only PDF, JPG and PNG files are allowed."}, status=400)
+
+        file_type, signature = file_info
+        header = uploaded.read(len(signature))
+        uploaded.seek(0)
+        if not header.startswith(signature):
+            return Response({"detail": "The file contents do not match the selected file type."}, status=400)
+
+        digest = hashlib.sha256()
+        for chunk in uploaded.chunks():
+            digest.update(chunk)
+        uploaded.seek(0)
+        checksum = digest.hexdigest()
+        original_name = Path(uploaded.name).name[:255]
+
+        with transaction.atomic():
+            document = InvoiceDocument.objects.create(
+                invoice=invoice,
+                uploaded_by=user,
+                file=uploaded,
+                original_filename=original_name,
+                file_type=file_type,
+                file_size=uploaded.size,
+                sha256=checksum,
+            )
+            queue_ledger_event(
+                event_type="INVOICE_DOCUMENT_UPLOADED",
+                entity_type="invoice",
+                entity_id=invoice.id,
+                actor=user,
+                invoice=invoice,
+                payload={
+                    "document_id": str(document.id),
+                    "sha256": checksum,
+                    "file_type": file_type,
+                    "file_size": document.file_size,
+                },
+            )
+
+        return Response({
+            "id": str(document.id),
+            "filename": document.original_filename,
+            "fileType": document.file_type,
+            "size": document.file_size,
+            "sha256": document.sha256,
+            "uploadedBy": user.name,
+            "createdAt": document.created_at,
+        }, status=201)
+
+
+class InvoiceDocumentDownloadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk, document_id):
+        if request.user.role not in ["supplier", "buyer"]:
+            raise PermissionDenied("Only the invoice supplier and buyer can download documents.")
+        invoice = get_object_or_404(visible_invoices(request.user), pk=pk)
+        document = get_object_or_404(InvoiceDocument, pk=document_id, invoice=invoice)
+        content_types = {"PDF": "application/pdf", "JPEG": "image/jpeg", "PNG": "image/png"}
+        return FileResponse(
+            document.file.open("rb"),
+            as_attachment=True,
+            filename=document.original_filename,
+            content_type=content_types.get(document.file_type, "application/octet-stream"),
+        )
 
 
 class SubmitInvoiceView(APIView):
