@@ -29,6 +29,7 @@ class LedgerEventsView(APIView):
             "eventType": row.event_type, "entityType": row.entity_type,
             "entityId": row.entity_id, "status": row.status,
             "sequence": row.block_index, "hash": row.block_hash,
+            "previousHash": row.previous_hash,
             "actor": row.actor.name, "createdAt": row.created_at,
             "deliveredAt": row.delivered_at,
             "lastError": row.last_error if row.status == LedgerOutboxEvent.Status.FAILED else "",
