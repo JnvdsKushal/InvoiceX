@@ -77,6 +77,25 @@ class OfferListCreateView(APIView):
         return Response(FinancingOfferSerializer(offer).data, status=201)
 
 
+class WithdrawOfferView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        if not active_user(request.user, "lender"):
+            raise PermissionDenied("An active lender account is required.")
+        with transaction.atomic():
+            offer = get_object_or_404(
+                FinancingOffer.objects.select_for_update(),
+                pk=pk,
+                lender_organization=request.user.organization,
+            )
+            if offer.status != FinancingOffer.Status.ACTIVE:
+                raise WorkflowConflict("Only active offers can be withdrawn.")
+            offer.status = FinancingOffer.Status.WITHDRAWN
+            offer.save(update_fields=["status"])
+        return Response(FinancingOfferSerializer(offer).data)
+
+
 class AcceptOfferView(APIView):
     permission_classes = [IsAuthenticated]
 
