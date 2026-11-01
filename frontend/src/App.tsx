@@ -14,6 +14,7 @@ import HomePage from "./pages/public/HomePage";
 import LoginPage from "./pages/auth/LoginPage";
 import RegisterPage from "./pages/auth/RegisterPage";
 import UnauthorizedPage from "./pages/UnauthorizedPage";
+import InvoiceFinancingDemoPage from "./pages/demo/InvoiceFinancingDemoPage";
 
 // Admin layout and pages
 import AdminLayout from "./components/admin/AdminLayout";
@@ -71,6 +72,8 @@ export default function App() {
             path="/unauthorized"
             element={<UnauthorizedPage />}
           />
+
+          <Route path="/demo/invoice-financing" element={<InvoiceFinancingDemoPage />} />
 
           {/* ================= ADMIN ROUTES ================= */}
 
