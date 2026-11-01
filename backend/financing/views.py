@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 from invoices.models import Invoice
 from .models import FinancingOffer, FinancingAgreement, Repayment, RepaymentReceipt
 from .serializers import FinancingOfferSerializer, FinancingAgreementSerializer, RepaymentSerializer
+from ledger.services import queue_ledger_event
 
 
 class WorkflowConflict(APIException):
@@ -74,6 +75,14 @@ class OfferListCreateView(APIView):
             if expires_at <= timezone.now():
                 return Response({"detail": "Offer expiry must be in the future."}, status=400)
             offer = serializer.save(invoice=invoice, lender_organization=request.user.organization, created_by=request.user)
+            queue_ledger_event(
+                event_type="FINANCING_OFFER_CREATED",
+                entity_type="invoice",
+                entity_id=invoice.id,
+                actor=request.user,
+                invoice=invoice,
+                payload={"offer_id": str(offer.id), "advance_percentage": str(offer.advance_percentage), "fee_percentage": str(offer.fee_percentage), "annual_interest_rate": str(offer.annual_interest_rate), "repayment_days": offer.repayment_days},
+            )
         return Response(FinancingOfferSerializer(offer).data, status=201)
 
 
@@ -123,6 +132,15 @@ class AcceptOfferView(APIView):
             invoice.status = Invoice.Status.FUNDING_PENDING
             invoice.version += 1
             invoice.save(update_fields=["status", "version", "updated_at"])
+            queue_ledger_event(
+                event_type="FINANCING_OFFER_ACCEPTED",
+                entity_type="financing_agreement",
+                entity_id=agreement.id,
+                actor=request.user,
+                invoice=invoice,
+                financing_agreement=agreement,
+                payload={"offer_id": str(offer.id), "status": agreement.status, "net_proceeds": str(agreement.net_proceeds), "repayment_amount": str(agreement.repayment_amount)},
+            )
         return Response(FinancingAgreementSerializer(agreement).data, status=201)
 
 
@@ -162,6 +180,15 @@ class ConfirmDisbursementView(APIView):
             invoice.version += 1
             invoice.save(update_fields=["status", "version", "updated_at"])
             Repayment.objects.create(agreement=agreement, amount_due=agreement.repayment_amount, due_date=agreement.due_date)
+            queue_ledger_event(
+                event_type="FINANCING_DISBURSEMENT_CONFIRMED",
+                entity_type="financing_agreement",
+                entity_id=agreement.id,
+                actor=request.user,
+                invoice=invoice,
+                financing_agreement=agreement,
+                payload={"status": agreement.status, "principal_amount": str(agreement.principal_amount), "reference_recorded": True},
+            )
         return Response(FinancingAgreementSerializer(agreement).data)
 
 
@@ -202,6 +229,17 @@ class RecordRepaymentView(APIView):
             if received > outstanding:
                 return Response({"detail": "Received amount exceeds the outstanding balance."}, status=400)
             RepaymentReceipt.objects.create(repayment=repayment, amount=received, reference=reference, recorded_by=request.user)
+            agreement_for_event = repayment.agreement
+            invoice_for_event = Invoice.objects.select_for_update().get(pk=agreement_for_event.invoice_id)
+            queue_ledger_event(
+                event_type="REPAYMENT_RECEIVED",
+                entity_type="financing_agreement",
+                entity_id=agreement_for_event.id,
+                actor=request.user,
+                invoice=invoice_for_event,
+                financing_agreement=agreement_for_event,
+                payload={"amount_received": str(received), "payment_status": "RECORDED"},
+            )
             repayment.amount_received += received
             repayment.payment_reference = reference
             if repayment.amount_received == repayment.amount_due:
@@ -218,4 +256,13 @@ class RecordRepaymentView(APIView):
                 invoice.status = Invoice.Status.SETTLED
                 invoice.version += 1
                 invoice.save(update_fields=["status", "version", "updated_at"])
+                queue_ledger_event(
+                    event_type="FINANCING_SETTLED",
+                    entity_type="financing_agreement",
+                    entity_id=agreement.id,
+                    actor=request.user,
+                    invoice=invoice,
+                    financing_agreement=agreement,
+                    payload={"invoice_status": invoice.status, "repayment_status": repayment.status},
+                )
         return Response(RepaymentSerializer(repayment).data)
