@@ -87,3 +87,27 @@ class VerificationEvent(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+
+class InvoiceDocument(models.Model):
+    class FileType(models.TextChoices):
+        PDF = "PDF", "PDF"
+        JPEG = "JPEG", "JPEG"
+        PNG = "PNG", "PNG"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name="documents")
+    uploaded_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="invoice_documents")
+    file = models.FileField(upload_to="invoices/private/%Y/%m/")
+    original_filename = models.CharField(max_length=255)
+    file_type = models.CharField(max_length=10, choices=FileType.choices)
+    file_size = models.PositiveBigIntegerField()
+    sha256 = models.CharField(max_length=64, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.original_filename} ({self.invoice.invoice_number})"
