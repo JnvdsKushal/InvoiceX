@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { AlertCircle, BadgeCheck, CalendarClock, CheckCircle2, FileText, Landmark, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
+import { AlertCircle, BadgeCheck, CalendarClock, CheckCircle2, FileText, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
 import axios from "axios";
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
@@ -41,6 +41,10 @@ const statusClass = (status: string) =>
     : ["FAILED", "REJECTED", "OVERDUE", "CANCELLED"].includes(status)
       ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700");
 
+async function safeLoad<T>(request: Promise<{ data: T }>): Promise<T | null> {
+  try { return (await request).data; } catch { return null; }
+}
+
 function Panel({ title, children, action }: { title: string; children: ReactNode; action?: React.ReactNode }) {
   return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
@@ -74,26 +78,22 @@ export default function SupplierWorkspacePage() {
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
-    const requests = await Promise.allSettled([
-      api.get<PaginatedResponse<Invoice>>("/invoices/"),
-      api.get<Offer[]>("/financing/offers/"),
-      api.get<Agreement[]>("/financing/agreements/"),
-      api.get<Repayment[]>("/financing/repayments/"),
-      api.get<LedgerEvent[]>("/ledger/events/"),
+    const [invoiceData, offerData, agreementData, repaymentData, ledgerData] = await Promise.all([
+      safeLoad(api.get<PaginatedResponse<Invoice>>("/invoices/")),
+      safeLoad(api.get<Offer[]>("/financing/offers/")),
+      safeLoad(api.get<Agreement[]>("/financing/agreements/")),
+      safeLoad(api.get<Repayment[]>("/financing/repayments/")),
+      safeLoad(api.get<LedgerEvent[]>("/ledger/events/")),
     ]);
-    const failures: string[] = [];
-    requests.forEach((result, index) => {
-      if (result.status === "rejected") {
-        failures.push(["invoices", "offers", "agreements", "repayments", "ledger"][index]);
-        return;
-      }
-      const data = result.value.data;
-      if (index === 0) setInvoices(data.results || []);
-      if (index === 1) setOffers(data || []);
-      if (index === 2) setAgreements(data || []);
-      if (index === 3) setRepayments(data || []);
-      if (index === 4) setEvents(data || []);
-    });
+    if (invoiceData) setInvoices(invoiceData.results || []);
+    if (offerData) setOffers(offerData);
+    if (agreementData) setAgreements(agreementData);
+    if (repaymentData) setRepayments(repaymentData);
+    if (ledgerData) setEvents(ledgerData);
+    const failures = [
+      !invoiceData && "invoices", !offerData && "offers", !agreementData && "agreements",
+      !repaymentData && "repayments", !ledgerData && "ledger",
+    ].filter(Boolean);
     if (failures.length) setError("Some sections could not load (" + failures.join(", ") + "). Refresh after checking your connection.");
     setLoading(false);
   }, []);
