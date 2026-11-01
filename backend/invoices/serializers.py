@@ -56,8 +56,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "status", "version")
 
     def get_documentIds(self, obj):
-        # Document records will be implemented in a later milestone.
-        return []
+        return [str(document_id) for document_id in obj.documents.values_list("id", flat=True)]
 
     def validate_buyerOrganizationId(self, buyer_id):
         request = self.context.get("request")
